@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>{{title}}</title>
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="{{{site.basepath}}}/css/app.css">
   {{#styles}}
   <link rel="stylesheet" href="{{{.}}}">
   {{/styles}}
@@ -11,12 +11,12 @@
 <body class="wrapper">
 <header>
   <h1>
-    <a href="/index.html">{{siteTitle}}</a>
+    <a href="{{{site.basepath}}}/index.html">{{site.title}}</a>
   </h1>
   <nav>
     <ul>
-      <li><a href="/">Home</a></li>
-      <li><a href="/pages/about">About</a></li>
+      <li><a href="{{{site.basepath}}}/">Home</a></li>
+      <li><a href="{{{site.basepath}}}/pages/about">About</a></li>
     </ul>
   </nav>
 </header>
@@ -34,12 +34,9 @@
   </ul>
   {{/pagination_exists}}
 </main>
-<footer>
-  <img src="/img/apollonet.png" width="70" height="71" alt="ApolloNet">
-</footer>
 {{#scripts}}
 <script defer src="{{{.}}}"></script>
 {{/scripts}}
-<script defer src="/js/app.js"></script>
+<script defer src="{{{site.basepath}}}/js/app.js"></script>
 </body>
 </html>

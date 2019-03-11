@@ -2,12 +2,12 @@
   <img src="{{{imageDerivatives.thumbnail.src}}}" alt="{{title}}" width="{{imageDerivatives.thumbnail.width}}" height="{{imageDerivatives.thumbnail.height}}">
   <h1><a href="{{{url}}}">{{title}}</a></h1>
   <p>{{date.render}}</p>
-  {{#tags_count}}
+  {{#taxonomies.tags.count}}
     <ul>
     {{#taxonomies.tags.terms}}
       <li><a href="{{{url}}}">{{name}}</a></li>
     {{/taxonomies.tags.terms}}
     </ul>
-  {{/tags_count}}
+  {{/taxonomies.tags.count}}
   {{{body}}}
 </article>

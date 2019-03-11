@@ -104,7 +104,7 @@ async function buildContents (dir) {
     buildSiteTaxonomies(file)
     // Article template.
     const layoutContent = {
-      siteTitle: site.title,
+      site: site,
       styles: file.variables.styles,
       scripts: file.variables.scripts,
       content: mustache.render(site.templates['article--full'], file.variables)
@@ -145,7 +145,7 @@ async function buildIndex (contents, dirPath, title) {
     }).join('\n')
     // Layout template.
     const layoutContent = {
-      siteTitle: site.title,
+      site: site,
       title: title,
       content: articlesHtml,
       pagination_exists: true,
@@ -216,7 +216,7 @@ async function buildTaxonomies () {
   }
   await Promise.all(site.taxonomies.map(async (taxonomy) => {
     await Promise.all(taxonomy.terms.map(async (term) => {
-      const termIndexes = await buildIndex (term.posts, term.url, term.name)
+      const termIndexes = await buildIndex (term.posts, term.path, term.name)
       termIndexes.map(index => indexes.push(index))
     }))
   }))
@@ -254,7 +254,7 @@ async function buildSitemap (contents, customUrls) {
   })
   const urls = [...contentsUrls, ...customUrls]
   const contentXml = urls.map(url => {
-    const fullUrl = path.join(site.baseurl, url)
+    const fullUrl = path.join(site.baseurl, site.basepath, url)
     return mustache.render(site.templates['article--sitemap'], {url: fullUrl})
   }).join('\n')
   const sitemapContent = {
@@ -273,7 +273,7 @@ async function fileFormatVariables (file) {
   const frontmatter = await matter(file.content)
   const variables = frontmatter.data
   variables.body = await marked(frontmatter.content)
-  variables.url = path.join('/', file.dir, file.basename + '.html')
+  variables.url = path.join(site.basepath, file.dir, file.basename + '.html')
   variables.styles = []
   variables.scripts = []
   formatDate(variables, 'date')
@@ -324,10 +324,11 @@ async function formatImage (variables, field) {
   await Promise.all(site.imageFormats.map(async (format) => {
     const formatDir = path.join(site.publicDir, site.filesDir, format.name)
     const outputPath = path.join(formatDir, imageBasename)
+    const outputSrc = path.join(site.basepath, site.filesDir, format.name, imageBasename)
     await mkdirp.mkdirpAsync(formatDir)
     sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
     variables.imageDerivatives[format.name] = {
-      src: outputPath,
+      src: outputSrc,
       width: format.width,
       height: format.height
     }
@@ -402,7 +403,8 @@ function createTerm(taxonomy, term) {
   const termSlug = slugify(term, slugifyOptions)
   return {
     name: term,
-    url: path.join('/', taxoSlug, termSlug)
+    path: path.join(taxoSlug, termSlug),
+    url: path.join(site.basepath, taxoSlug, termSlug)
   }
 }
 
@@ -428,10 +430,11 @@ async function loadTemplates () {
 function defineSiteSettings () {
   const cwd = process.cwd()
   const settingsPath = path.join(cwd, '/settings.json')
-  const overrides = fs.exists(settingsPath) ? require(settingsPath) : []
+  const overrides = fs.statAsync(settingsPath) ? require(settingsPath) : []
   const settings = {
     title: 'Le nom du titre',
     baseurl: 'http://aro.loc',
+    basepath: '',
     cwd: cwd,
     publicDir: 'public',
     paginate: 10,
@@ -439,7 +442,7 @@ function defineSiteSettings () {
     pagesDir: 'pages',
     postsDir: 'posts',
     filesDir: 'files',
-    taxonomiesNames: [],
+    taxonomiesNames: ['tags'],
     dateFormat: 'D MMMM YYYY',
     mapZoom: 12,
     imageFormats: [
@@ -539,8 +542,10 @@ async function init (name) {
   const nameSlug = slugify(name, slugifyOptions)
   const defaultsDir = `${__dirname}/defaults`
   const newSettings = JSON.stringify({
-    "title": name,
-    "baseurl": ""
+    title: name,
+    baseurl: '',
+    basepath: '',
+    taxonomiesNames: ['tags']
   })
   // Create dirs.
   await mkdirp.mkdirpAsync(nameSlug)
@@ -548,10 +553,10 @@ async function init (name) {
   // Copy defaults.
   ncp(defaultsDir, nameSlug, () => {})
   // Create settings file.
-  fs.writeFile(`${nameSlug}/settings.js`, newSettings, 'utf8', () => {})
+  fs.writeFile(path.join(nameSlug, 'settings.json'), newSettings, 'utf8', () => {})
   // Log.
   console.log(`Project "${name}" is created in the directory "${nameSlug}"`)
-  console.log(`Adjust the config in its settings.js file`)
+  console.log(`Adjust the config in its settings.json file`)
   console.log(`Next steps:`)
   console.log(`$ cd ${nameSlug}`)
   console.log(`$ aro build`)

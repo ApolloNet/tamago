@@ -26,13 +26,14 @@ Settings.json can override these settings:
 
 - title: string
 - baseurl: string, like "http://example.com"
+- basepath: string, the subpath of the website, like "/blog"
 - paginate: number, default to 10
-- taxonomiesNames: array, like ['tags', 'beatles']
+- taxonomiesNames: array, defaults to ['tags']
 - dateFormat: string, defaults to 'D MMMM YYYY', use [https://date-fns.org/v1.30.1/docs/format](https://date-fns.org/v1.30.1/docs/format)
 - mapZoom: number, defaults to 12
 - imageFormats: array of image formats
 
-## Image formats
+### Image formats
 
 Rename or add formats with this array of image formats objects :
 
