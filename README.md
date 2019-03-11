@@ -30,6 +30,26 @@ Settings.json can override these settings:
 - taxonomiesNames: array, like ['tags', 'beatles']
 - dateFormat: string, defaults to 'D MMMM YYYY', use [https://date-fns.org/v1.30.1/docs/format](https://date-fns.org/v1.30.1/docs/format)
 - mapZoom: number, defaults to 12
+- imageFormats: array of image formats
+
+## Image formats
+
+Rename or add formats with this array of image formats objects :
+
+```
+imageFormats: [
+  {
+    name: 'thumbnail',
+    width: 300,
+    height: 200
+  },
+  {
+    name: 'large',
+    width: 960,
+    height: 480
+  }
+]
+```
 
 ## Input folders
 

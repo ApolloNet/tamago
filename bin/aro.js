@@ -15,6 +15,7 @@ const marked = require('marked')
 const matter = require('gray-matter')
 const mkdirp = require('mkdirp')
 const mustache = require('mustache')
+const sharp = require('sharp')
 const slugify = require('slugify')
 // Promisify.
 const Promise = require('bluebird')
@@ -276,23 +277,24 @@ async function fileFormatVariables (file) {
   variables.styles = []
   variables.scripts = []
   formatDate(variables, 'date')
+  await formatImage(variables, 'image')
   formatTaxonomies(variables)
   await formatGeo(variables, 'address')
   return variables
 }
 
 /**
- * Format date
+ * Format date.
  * @param object variables
- * @param string dateField
+ * @param string field
  * @return object variables
  */
-function formatDate (variables, dateField) {
-  if (!variables[dateField]) {
+function formatDate (variables, field) {
+  if (!variables[field]) {
     return
   }
-  const dateObject = new Date(variables[dateField])
-  variables[dateField] = {
+  const dateObject = new Date(variables[field])
+  variables[field] = {
     object: dateObject,
     render: format(dateObject, site.dateFormat, {locale: fr}),
     timestamp: format(dateObject, 'X')
@@ -301,7 +303,40 @@ function formatDate (variables, dateField) {
 }
 
 /**
- * Format taxonomies
+ * Format image.
+ * @param object variables
+ * @param string image
+ * @return object variables
+ */
+async function formatImage (variables, field) {
+  if (!variables[field]) {
+    return
+  }
+  const imagePath = variables[field]
+  const imageBasename = path.basename(imagePath)
+  const imageExists = fs.statAsync(imagePath)
+  if (!imageExists) {
+    return
+  }
+  variables.imageDerivatives = {
+    original: variables[field]
+  }
+  await Promise.all(site.imageFormats.map(async (format) => {
+    const formatDir = path.join(site.publicDir, site.filesDir, format.name)
+    const outputPath = path.join(formatDir, imageBasename)
+    await mkdirp.mkdirpAsync(formatDir)
+    sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
+    variables.imageDerivatives[format.name] = {
+      src: outputPath,
+      width: format.width,
+      height: format.height
+    }
+  }))
+  return variables
+}
+
+/**
+ * Format taxonomies.
  * @param object variables
  * @return object variables
  */
@@ -327,15 +362,15 @@ function formatTaxonomies (variables) {
 /**
  * Format geo from address string.
  * @param object variables
- * @param string address
+ * @param string field
  * @return object variables
  */
-async function formatGeo (variables, address) {
-  if (!variables[address]) {
+async function formatGeo (variables, field) {
+  if (!variables[field]) {
     return
   }
   const options = {
-    url: 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&q=' + encodeURI(variables[address]),
+    url: 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&q=' + encodeURI(variables[field]),
     json: true,
     method: 'GET',
     headers: {
@@ -389,7 +424,6 @@ async function loadTemplates () {
 
 /**
  * Define site settings
- * @return object
  */
 function defineSiteSettings () {
   const cwd = process.cwd()
@@ -407,7 +441,19 @@ function defineSiteSettings () {
     filesDir: 'files',
     taxonomiesNames: [],
     dateFormat: 'D MMMM YYYY',
-    mapZoom: 12
+    mapZoom: 12,
+    imageFormats: [
+      {
+        name: 'thumbnail',
+        width: 300,
+        height: 200
+      },
+      {
+        name: 'large',
+        width: 960,
+        height: 480
+      }
+    ]
   }
   Object.keys(settings).map(setting => {
     settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
