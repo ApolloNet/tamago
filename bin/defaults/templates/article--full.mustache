@@ -1,0 +1,22 @@
+<article>
+  <h1>{{title}}</h1>
+  <p>{{date.render}}</p>
+  {{#taxonomies.tags.count}}
+    <ul>
+    {{#taxonomies.tags.terms}}
+      <li><a href="{{{url}}}">{{name}}</a></li>
+    {{/taxonomies.tags.terms}}
+    </ul>
+  {{/taxonomies.tags.count}}
+  {{#taxonomies.beatles.count}}
+    <ul>
+    {{#taxonomies.beatles.terms}}
+      <li><a href="{{{url}}}">{{name}}</a></li>
+    {{/taxonomies.beatles.terms}}
+    </ul>
+  {{/taxonomies.beatles.count}}
+  {{{body}}}
+  {{#hasGeo}}
+  <div id="map" class="map" data-lat="{{lat}}" data-lon="{{lon}}" data-zoom="{{zoom}}"></div>
+  {{/hasGeo}}
+</article>
