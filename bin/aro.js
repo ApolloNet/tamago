@@ -310,14 +310,17 @@ function formatDate (variables, field) {
  */
 async function formatImage (variables, field) {
   if (!variables[field]) {
+    variables.hasImage = false
     return
   }
   const imagePath = variables[field]
   const imageBasename = path.basename(imagePath)
   const imageExists = fs.statAsync(imagePath)
   if (!imageExists) {
+    variables.hasImage = false
     return
   }
+  variables.hasImage = true
   variables.imageDerivatives = {
     original: variables[field]
   }

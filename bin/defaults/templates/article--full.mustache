@@ -1,6 +1,8 @@
 <article>
   <h1>{{title}}</h1>
+  {{#hasImage}}
   <img src="{{{imageDerivatives.large.src}}}" alt="{{title}}" width="{{imageDerivatives.large.width}}" height="{{imageDerivatives.large.height}}">
+  {{/hasImage}}
   <p>{{date.render}}</p>
   {{#taxonomies.tags.count}}
     <ul>
