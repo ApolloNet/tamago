@@ -6,6 +6,10 @@ Static website generator, build with NodeJS.
 
 `npm i -g git+ssh://git@github.com:apollonet/aro.git`
 
+## Update
+
+`npm update -g git+ssh://git@github.com:apollonet/aro.git`
+
 ## Init a website
 
 `aro init "Website name"`
