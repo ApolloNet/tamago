@@ -2,13 +2,15 @@
 
 Static website generator, build with NodeJS.
 
-`npm i -g aro` when published to npm repo.
+## Install
 
-## Init
+`npm i -g git+ssh://git@github.com:apollonet/aro.git`
+
+## Init a website
 
 `aro init "Website name"`
 
-## Build
+## Build a website
 
 `cd website-name`
 
