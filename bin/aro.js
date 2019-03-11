@@ -87,7 +87,7 @@ async function build () {
  */
 async function buildContents (dir) {
   // Make dir.
-  await mkdirp.mkdirpAsync(`${site.publicDir}/${dir}`)
+  await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
   // Files.
   const files = await fs.readdirAsync(dir)
   const contents = await Promise.all(files.map(async (filename) => {
@@ -95,9 +95,9 @@ async function buildContents (dir) {
     const file = await {
       basename: path.basename(filename, '.md'),
       dir: dir,
-      path: `${dir}/${filename}`
+      path: path.join(dir, filename)
     }
-    file.htmlpath = `${site.publicDir}/${dir}/${file.basename}.html`
+    file.htmlpath = path.join(site.publicDir, dir, file.basename + '.html')
     file.content = await fs.readFileAsync(file.path, 'utf-8')
     file.variables = await fileFormatVariables(file)
     // Build site taxonomies.
@@ -128,7 +128,7 @@ async function buildContents (dir) {
  */
 async function buildIndex (contents, dirPath, title) {
   // Make dir.
-  await mkdirp.mkdirpAsync(`${site.publicDir}${dirPath}`)
+  await mkdirp.mkdirpAsync(path.join(site.publicDir, dirPath))
   // Order contents by date.
   contents.sort(function (a, b) {
     return b.date.timestamp - a.date.timestamp;
@@ -157,9 +157,9 @@ async function buildIndex (contents, dirPath, title) {
     const html = mustache.render(site.templates['layout'], layoutContent)
     // Write file.
     const filename = page === 0 ? `/index.html` : `/index-${page}.html`
-    fs.writeFileAsync(`${site.publicDir}${dirPath}${filename}`, html)
+    fs.writeFileAsync(path.join(site.publicDir, dirPath, filename), html)
     // Return url.
-    return `${dirPath}${filename}`
+    return path.join(dirPath, filename)
   }))
   return indexes
 }
@@ -232,7 +232,7 @@ async function getTaxonomies (dir) {
   const files = await fs.readdirAsync(dir)
   const taxonomies = await Promise.all(files.map(async (filename) => {
     const taxonomy = {
-      path: `${dir}/${filename}`,
+      path: path.join(dir, filename),
       name: path.basename(filename, '.txt')
     }
     const content = await fs.readFileAsync(taxonomy.path, 'utf-8')
@@ -254,7 +254,7 @@ async function buildSitemap (contents, customUrls) {
   })
   const urls = [...contentsUrls, ...customUrls]
   const contentXml = urls.map(url => {
-    const fullUrl = `${site.baseurl}${url}`
+    const fullUrl = path.join(site.baseurl, url)
     return mustache.render(site.templates['article--sitemap'], {url: fullUrl})
   }).join('\n')
   const sitemapContent = {
@@ -273,7 +273,7 @@ async function fileFormatVariables (file) {
   const frontmatter = await matter(file.content)
   const variables = frontmatter.data
   variables.body = await marked(frontmatter.content)
-  variables.url = `/${file.dir}/${file.basename}.html`
+  variables.url = path.join('/', file.dir, file.basename + '.html')
   variables.styles = []
   variables.scripts = []
   formatDate(variables, 'date')
@@ -402,7 +402,7 @@ function createTerm(taxonomy, term) {
   const termSlug = slugify(term, slugifyOptions)
   return {
     name: term,
-    url: `/${taxoSlug}/${termSlug}`
+    url: path.join('/', taxoSlug, termSlug)
   }
 }
 
@@ -415,7 +415,7 @@ async function loadTemplates () {
   const templates = {}
   await Promise.all(files.map(async (filename) => {
     const templateName = path.basename(filename, '.mustache')
-    const templatePath = `${site.templatesDir}/${filename}`
+    const templatePath = path.join(site.templatesDir, filename)
     const templateContent = await fs.readFileAsync(templatePath, 'utf-8')
     templates[templateName] = templateContent.toString()
   }))
@@ -427,7 +427,7 @@ async function loadTemplates () {
  */
 function defineSiteSettings () {
   const cwd = process.cwd()
-  const settingsPath = `${cwd}/settings.json`
+  const settingsPath = path.join(cwd, '/settings.json')
   const overrides = fs.exists(settingsPath) ? require(settingsPath) : []
   const settings = {
     title: 'Le nom du titre',
@@ -544,7 +544,7 @@ async function init (name) {
   })
   // Create dirs.
   await mkdirp.mkdirpAsync(nameSlug)
-  await mkdirp.mkdirpAsync(`${nameSlug}/${site.publicDir}`)
+  await mkdirp.mkdirpAsync(path.join(nameSlug, site.publicDir))
   // Copy defaults.
   ncp(defaultsDir, nameSlug, () => {})
   // Create settings file.
