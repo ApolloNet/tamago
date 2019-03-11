@@ -101,7 +101,7 @@ async function buildContents (dir) {
     // Article template.
     const layoutContent = {
       site: site,
-      styles: file.variables.styles,
+      styles: [...site.styles, file.variables.styles],
       scripts: [...site.scripts, ...file.variables.scripts],
       content: mustache.render(site.templates['article--full'], file.variables)
     }
@@ -109,6 +109,10 @@ async function buildContents (dir) {
     const html = mustache.render(site.templates['layout'], layoutContent)
     // Write file.
     fs.writeFileAsync(file.htmlpath, html)
+    // 404
+    if (file.basename === '404') {
+      ncp(file.htmlpath, path.join(site.publicDir, '404.html'), () => {})
+    }
     // Return file variables object.
     return file.variables
   }))
