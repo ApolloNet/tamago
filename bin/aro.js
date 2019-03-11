@@ -32,12 +32,8 @@ const slugifyOptions = {
   lower: true
 }
 
-// Catch it if you can.
-try {
-  go()
-} catch (error) {
-  console.log(error)
-}
+// Let's
+go()
 
 /**
  * Go.
@@ -62,6 +58,13 @@ function go () {
 async function build () {
   // Clean public dir.
   clean()
+  // Files.
+  await buildFiles()
+  // Assets.
+  await buildLibs()
+  await buildImages()
+  await buildCSS()
+  await buildJS()
   // Content.
   site.templates = await loadTemplates()
   site.pages = await buildContents(site.pagesDir)
@@ -71,13 +74,6 @@ async function build () {
   const contents = [...site.pages, ...site.posts]
   const customUrls = [...postsIndexes, ...taxoIndexes]
   await buildSitemap(contents, customUrls)
-  // Files.
-  await buildFiles()
-  // Assets.
-  await buildLibs()
-  await buildImages()
-  await buildCSS()
-  await buildJS()
 }
 
 /**
@@ -106,7 +102,7 @@ async function buildContents (dir) {
     const layoutContent = {
       site: site,
       styles: file.variables.styles,
-      scripts: file.variables.scripts,
+      scripts: [...site.scripts, ...file.variables.scripts],
       content: mustache.render(site.templates['article--full'], file.variables)
     }
     // Layout template.
@@ -147,8 +143,10 @@ async function buildIndex (contents, dirPath, title) {
     const layoutContent = {
       site: site,
       title: title,
+      styles: site.styles,
+      scripts: site.scripts,
       content: articlesHtml,
-      pagination_exists: true,
+      pagination_exists: pagesNumber > 1,
       prevurl: page > 1 ? `index-${page - 1}.html` : `index.html`,
       nexturl: page < pagesNumber ? `index-${page + 1}.html` : null,
       prevurl_exists: page > 0,
@@ -509,7 +507,11 @@ async function buildFiles () {
  * Build libs.
  */
 async function buildLibs () {
-  execAndLog(`cp -r assets/libs ${site.publicDir}/`)
+  fs.statAsync('assets/libs').then(async () => {
+    execAndLog(`cp -r assets/libs ${site.publicDir}/`)
+  }).catch(error => {
+    console.log('[Libs] Dir assets/libs does not exist.')
+  })
 }
 
 /**
@@ -524,17 +526,25 @@ async function buildImages () {
  * Build CSS.
  */
 async function buildCSS () {
-  await mkdirp.mkdirpAsync(`${site.publicDir}/css`)
+  site.styles = []
+  await mkdirp.mkdirpAsync(path.join(site.publicDir, 'css'))
   await execAndLog(`node-sass --output-style compressed -o ${site.cwd}/${site.publicDir}/css ${site.cwd}/assets/scss`)
   await execAndLog(`postcss -u autoprefixer -r ${site.cwd}/${site.publicDir}/css/app.css`)
+  site.styles.push(path.join(site.basepath, 'css/app.css'))
 }
 
 /**
  * Build JS.
  */
 async function buildJS () {
-  await mkdirp.mkdirpAsync(`${site.publicDir}/js`)
-  execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
+  site.scripts = []
+  fs.statAsync('assets/js').then(async () => {
+    await mkdirp.mkdirpAsync(path.join(site.publicDir, 'js'))
+    execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
+    site.scripts.push(path.join(site.basepath, 'js/app.js'))
+  }).catch(error => {
+    console.log('[JS] Dir assets/js does not exist.')
+  })
 }
 
 /**
