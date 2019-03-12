@@ -66,14 +66,13 @@ async function build () {
   await buildCSS()
   await buildJS()
   // Content.
-  site.templates = await loadTemplates()
-  site.pages = await buildContents(site.pagesDir)
-  site.posts = await buildContents(site.postsDir)
-  const taxoIndexes = await buildTaxonomies()
-  const postsIndexes = await buildIndex(site.posts, '', 'Posts')
-  const contents = [...site.pages, ...site.posts]
-  const customUrls = [...postsIndexes, ...taxoIndexes]
-  await buildSitemap(contents, customUrls)
+  await loadTemplates()
+  await buildContents(site.pagesDir)
+  await buildContents(site.postsDir)
+  await buildTaxonomies()
+  await buildIndex(site.posts, 'posts', 'Posts')
+  await buildHome()
+  await buildSitemap()
 }
 
 /**
@@ -116,7 +115,7 @@ async function buildContents (dir) {
     // Return file variables object.
     return file.variables
   }))
-  return contents
+  site[dir] = contents
 }
 
 /**
@@ -124,9 +123,10 @@ async function buildContents (dir) {
  * @param array contents
  * @param string dirPath
  * @param string title
+ * @param string slug
  * @return array indexes
  */
-async function buildIndex (contents, dirPath, title) {
+async function buildIndex (contents, dirPath, title, slug) {
   // Make dir.
   await mkdirp.mkdirpAsync(path.join(site.publicDir, dirPath))
   // Order contents by date.
@@ -160,10 +160,15 @@ async function buildIndex (contents, dirPath, title) {
     // Write file.
     const filename = page === 0 ? `/index.html` : `/index-${page}.html`
     fs.writeFileAsync(path.join(site.publicDir, dirPath, filename), html)
-    // Return url.
-    return path.join(dirPath, filename)
+    // Return index.
+    const index = {
+      title: title,
+      body: articlesHtml,
+      url: path.join(dirPath, filename),
+      slug: slug ? slug : slugify(title, slugifyOptions)
+    }
+    site.indexes.push(index)
   }))
-  return indexes
 }
 
 /**
@@ -178,6 +183,7 @@ async function buildSiteTaxonomies (file) {
   if (!site.hasOwnProperty('taxonomies')) {
     site.taxonomies = []
   }
+  // Each taxonomy.
   await Promise.all(Object.entries(file.variables.taxonomies).map(async (taxonomyArray) => {
     const taxonomy = taxonomyArray[1]
     let taxoIndex = site.taxonomies.findIndex(siteTaxo => {
@@ -186,10 +192,12 @@ async function buildSiteTaxonomies (file) {
     if (taxoIndex === -1) {
       site.taxonomies.push({
         name: taxonomy.name,
+        slug: slugify(taxonomy.name, slugifyOptions),
         terms: []
       })
       taxoIndex = site.taxonomies.length - 1
     }
+    // Each term.
     await Promise.all(Object.entries(taxonomy.terms).map(async (termArray) => {
       const term = termArray[1]
       let termIndex = site.taxonomies[taxoIndex].terms.findIndex(siteTerm => {
@@ -212,58 +220,41 @@ async function buildSiteTaxonomies (file) {
  * @return indexes
  */
 async function buildTaxonomies () {
-  const indexes = []
-  if (!site.taxonomies) {
-    return indexes
-  }
   await Promise.all(site.taxonomies.map(async (taxonomy) => {
     await Promise.all(taxonomy.terms.map(async (term) => {
-      const termIndexes = await buildIndex (term.posts, term.path, term.name)
-      termIndexes.map(index => indexes.push(index))
+      const slug = taxonomy.slug + '-' + term.slug
+      await buildIndex (term.posts, term.path, term.name, slug)
     }))
   }))
-  return indexes
 }
 
 /**
- * Get taxonomies from dir.
- * @param string dir
- * @return array taxonomies
+ * Build homepage.
  */
-async function getTaxonomies (dir) {
-  const files = await fs.readdirAsync(dir)
-  const taxonomies = await Promise.all(files.map(async (filename) => {
-    const taxonomy = {
-      path: path.join(dir, filename),
-      name: path.basename(filename, '.txt')
-    }
-    const content = await fs.readFileAsync(taxonomy.path, 'utf-8')
-    const terms = content.split('\n')
-    taxonomy.terms = terms.map(term => createTerm(taxonomy.name, term))
-    return taxonomy
-  }))
-  return taxonomies
+async function buildHome () {
+  const home = await getContent(site.home.where, site.home.slug)
+  const homeContent = {
+    site: site,
+    title: home.title,
+    styles: site.styles,
+    scripts: site.scripts,
+    content: home.body
+  }
+  const html = mustache.render(site.templates['layout'], homeContent)
+  fs.writeFileAsync(path.join(site.publicDir, 'index.html'), html)
 }
 
 /**
  * Build sitemap.
- * @param array contents
- * @param array customUrls
  */
-async function buildSitemap (contents, customUrls) {
-  const contentsUrls = contents.map(content => {
-    return content.url
-  })
-  const urls = [...contentsUrls, ...customUrls]
-  const contentXml = urls.map(url => {
-    const fullUrl = path.join(site.baseurl, site.basepath, url)
+async function buildSitemap () {
+  const contents = [...site.pages, ...site.posts, ...site.indexes]
+  const contentsXml = contents.map(content => {
+    const fullUrl = path.join(site.baseurl, site.basepath, content.url)
     return mustache.render(site.templates['article--sitemap'], {url: fullUrl})
   }).join('\n')
-  const sitemapContent = {
-    content: contentXml
-  }
-  const xml = mustache.render(site.templates['sitemap'], sitemapContent)
-  fs.writeFileAsync(`${site.publicDir}/sitemap.xml`, xml)
+  const xml = mustache.render(site.templates['sitemap'], {content: contentsXml})
+  fs.writeFileAsync(path.join(site.publicDir, 'sitemap.xml'), xml)
 }
 
 /**
@@ -276,6 +267,7 @@ async function fileFormatVariables (file) {
   const variables = frontmatter.data
   variables.body = await marked(frontmatter.content)
   variables.url = path.join(site.basepath, file.dir, file.basename + '.html')
+  variables.slug = slugify(file.basename, slugifyOptions)
   variables.styles = []
   variables.scripts = []
   formatDate(variables, 'date')
@@ -357,6 +349,7 @@ function formatTaxonomies (variables) {
     variables.taxonomies = {
       [taxonomyName]: {
         name: taxonomyName,
+        slug: slugify(taxonomyName, slugifyOptions),
         terms: terms,
         count: terms.length
       }
@@ -398,6 +391,22 @@ async function formatGeo (variables, field) {
 }
 
 /**
+ * Get content.
+ * @param string dir
+ * @param string slug
+ * @return object content
+ */
+async function getContent (dir, slug) {
+  let output = null
+  await Promise.all(site[dir].map(async (content) => {
+    if (content.slug === slug) {
+      output = content
+    }
+  }))
+  return output
+}
+
+/**
  * Create taxonomy term object.
  * @param string taxonomy
  * @param string term name
@@ -409,7 +418,8 @@ function createTerm(taxonomy, term) {
   return {
     name: term,
     path: path.join(taxoSlug, termSlug),
-    url: path.join(site.basepath, taxoSlug, termSlug)
+    url: path.join(site.basepath, taxoSlug, termSlug),
+    slug: slugify(term, slugifyOptions)
   }
 }
 
@@ -419,14 +429,12 @@ function createTerm(taxonomy, term) {
  */
 async function loadTemplates () {
   const files = await fs.readdirAsync(site.templatesDir)
-  const templates = {}
   await Promise.all(files.map(async (filename) => {
     const templateName = path.basename(filename, '.mustache')
     const templatePath = path.join(site.templatesDir, filename)
     const templateContent = await fs.readFileAsync(templatePath, 'utf-8')
-    templates[templateName] = templateContent.toString()
+    site.templates[templateName] = templateContent.toString()
   }))
-  return templates
 }
 
 /**
@@ -440,6 +448,10 @@ function defineSiteSettings () {
     title: 'Le nom du titre',
     baseurl: 'http://aro.loc',
     basepath: '',
+    home: {
+      where: 'indexes',
+      slug: 'posts'
+    },
     cwd: cwd,
     publicDir: 'public',
     paginate: 10,
@@ -461,7 +473,11 @@ function defineSiteSettings () {
         width: 960,
         height: 480
       }
-    ]
+    ],
+    templates: [],
+    posts: [],
+    pages: [],
+    indexes: []
   }
   Object.keys(settings).map(setting => {
     settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
@@ -504,6 +520,7 @@ async function clean () {
  * Build files.
  */
 async function buildFiles () {
+  await mkdirp.mkdirpAsync(path.join(site.publicDir, 'files'))
   execAndLog(`cp -r files ${site.publicDir}/`)
 }
 
