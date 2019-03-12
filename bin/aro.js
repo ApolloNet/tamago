@@ -220,6 +220,9 @@ async function buildSiteTaxonomies (file) {
  * @return indexes
  */
 async function buildTaxonomies () {
+  if (!site.taxonomies) {
+    return
+  }
   await Promise.all(site.taxonomies.map(async (taxonomy) => {
     await Promise.all(taxonomy.terms.map(async (term) => {
       const slug = taxonomy.slug + '-' + term.slug
@@ -539,8 +542,12 @@ async function buildLibs () {
  * Build images.
  */
 async function buildImages () {
-  execAndLog(`cp -r assets/img ${site.publicDir}/`)
-  //execAndLog(`imagemin assets/img ${site.publicDir}/img -p`)
+  fs.statAsync('assets/img').then(async () => {
+    execAndLog(`cp -r assets/img ${site.publicDir}/`)
+    //execAndLog(`imagemin assets/img ${site.publicDir}/img -p`)
+  }).catch(error => {
+    console.log('[Img] Dir assets/img does not exist.')
+  })
 }
 
 /**
