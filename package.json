@@ -8,6 +8,7 @@
     "email": "alex@apollonet.fr",
     "url": "https://apollonet.fr"
   },
+  "repository": "github:ApolloNet/tamago",
   "main": "bin/tamago.js",
   "bin": {
     "tamago": "./bin/tamago.js"
