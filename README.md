@@ -1,6 +1,6 @@
 # 卵 Tamago
 
-Static website generator, build with NodeJS.
+Static website generator, built with NodeJS.
 
 ## Install
 

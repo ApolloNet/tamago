@@ -1,6 +1,13 @@
 {
   "name": "tamago",
   "version": "1.0.0",
+  "description": "Static website generator, built with NodeJS.",
+  "licence": "GPL-3.0",
+  "author": {
+    "name": "Alexandre Ronsaut",
+    "email": "alex@apollonet.fr",
+    "url": "https://apollonet.fr"
+  },
   "main": "bin/tamago.js",
   "bin": {
     "tamago": "./bin/tamago.js"
