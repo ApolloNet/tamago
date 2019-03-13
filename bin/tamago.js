@@ -376,7 +376,7 @@ async function formatGeo (variables, field) {
     json: true,
     method: 'GET',
     headers: {
-      'User-Agent': 'Aro App Test, alex@apollonet.fr',
+      'User-Agent': 'Tamago App',
       'Referer': 'http://localhost/'
     }
   }
@@ -448,8 +448,8 @@ function defineSiteSettings () {
   const settingsPath = path.join(cwd, '/settings.json')
   const overrides = fs.statAsync(settingsPath) ? require(settingsPath) : []
   const settings = {
-    title: 'Le nom du titre',
-    baseurl: 'http://aro.loc',
+    title: 'Tamago website',
+    baseurl: '',
     basepath: '',
     home: {
       where: 'indexes',
@@ -600,7 +600,7 @@ async function init (name) {
   console.log(`Adjust the config in its settings.json file`)
   console.log(`Next steps:`)
   console.log(`$ cd ${nameSlug}`)
-  console.log(`$ aro build`)
+  console.log(`$ tamago build`)
 }
 
 /**
@@ -608,6 +608,6 @@ async function init (name) {
  */
 function help () {
   console.log('⚠️ Commands are:')
-  console.log('🚀 aro init "My website": init directory')
-  console.log('🔧 aro build: build your website')
+  console.log('🚀 tamago init "My website": init directory')
+  console.log('🔧 tamago build: build your website')
 }

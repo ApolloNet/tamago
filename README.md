@@ -1,24 +1,24 @@
-# Aro
+# 卵 Tamago
 
 Static website generator, build with NodeJS.
 
 ## Install
 
-`npm i -g git+ssh://git@github.com:apollonet/aro.git`
+`npm i -g git+ssh://git@github.com:apollonet/tamago.git`
 
 ## Update
 
-`npm update -g git+ssh://git@github.com:apollonet/aro.git`
+`npm update -g git+ssh://git@github.com:apollonet/tamago.git`
 
 ## Init a website
 
-`aro init "Website name"`
+`tamago init "Website name"`
 
 ## Build a website
 
 `cd website-name`
 
-`aro build`
+`tamago build`
 
 ## Settings
 
@@ -27,16 +27,16 @@ Settings.json can override these settings:
 - title: string
 - baseurl: string, like "http://example.com"
 - basepath: string, the subpath of the website, like "/blog"
-- home: object
-- paginate: number, default to 10
-- taxonomiesNames: array, defaults to ['tags']
+- home: object, see below for details
+- paginate: int, number of posts per page, default to 10
+- taxonomiesNames: array of taxonomy names, defaults to ['tags']
 - dateFormat: string, defaults to 'D MMMM YYYY', use [https://date-fns.org/v1.30.1/docs/format](https://date-fns.org/v1.30.1/docs/format)
-- mapZoom: number, defaults to 12
-- imageFormats: array of image formats
+- mapZoom: int, defaults to 12, see below for details
+- imageFormats: array of image formats, see below for details
 
 ### Home
 
-The `home` object defaults to the list of the 10 latest posts, like :
+The `home` object defaults to the list of the 10 latest posts, like:
 
 ```
 {
@@ -45,7 +45,7 @@ The `home` object defaults to the list of the 10 latest posts, like :
 }
 ```
 
-To display the page /pages/home.md, you can set :
+To display the page /pages/home.md, you can set:
 
 ```
 {
@@ -54,7 +54,7 @@ To display the page /pages/home.md, you can set :
 }
 ```
 
-To display the 10 latest posts with the tag sharkz :
+To display the 10 latest posts with the tag sharkz:
 
 ```
 {
@@ -65,7 +65,7 @@ To display the 10 latest posts with the tag sharkz :
 
 ### Image formats
 
-Rename or add formats with this array of image formats objects :
+Rename or add formats with this array of image formats objects:
 
 ```
 imageFormats: [
@@ -81,6 +81,12 @@ imageFormats: [
   }
 ]
 ```
+
+### Address field and map
+
+If your frontmatter has an 'address' field, it outputs has a map, via the [Leaflet](https://leafletjs.com/) library.
+
+⚠️ You must install Leaflet by yourself in the **assets/libs** folder.
 
 ## Input folders
 

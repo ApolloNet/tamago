@@ -1,13 +1,13 @@
 {
-  "name": "aro",
+  "name": "tamago",
   "version": "1.0.0",
-  "main": "bin/aro.js",
+  "main": "bin/tamago.js",
   "bin": {
-    "aro": "./bin/aro.js"
+    "tamago": "./bin/tamago.js"
   },
   "scripts": {
-    "start": "node bin/aro.js",
-    "lint": "standard bin/aro.js"
+    "start": "node bin/tamago.js",
+    "lint": "standard bin/tamago.js"
   },
   "babel": {
     "presets": [

@@ -2,4 +2,4 @@
 title: About
 ---
 
-This is a classical about page.
+Classical about page.
