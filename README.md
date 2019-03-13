@@ -4,11 +4,11 @@ Static website generator, built with NodeJS.
 
 ## Install
 
-`npm i -g git+ssh://git@github.com:apollonet/tamago.git`
+`npm i -g tamago`
 
-## Update
+Update:
 
-`npm update -g git+ssh://git@github.com:apollonet/tamago.git`
+`npm update -g tamago`
 
 ## Init a website
 
