@@ -583,7 +583,8 @@ async function buildJS () {
   site.scripts = []
   fs.statAsync('assets/js').then(async () => {
     await mkdirp.mkdirpAsync(path.join(site.publicDir, 'js'))
-    execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
+    execAndLog(`cp -r assets/js ${site.publicDir}/`)
+    //execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
     site.scripts.push(path.join(site.basepath, 'js/app.js'))
   }).catch(error => {
     console.error('[JS] Dir assets/js does not exist.')
