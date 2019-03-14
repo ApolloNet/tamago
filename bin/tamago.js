@@ -8,6 +8,7 @@ const fs = require('fs')
 const path = require('path')
 const request = require('request')
 // Third parties.
+const autoprefixer = require('autoprefixer')
 const ncp = require('ncp')
 const fr = require('date-fns/locale/fr')
 const format = require('date-fns/format')
@@ -15,6 +16,8 @@ const marked = require('marked')
 const matter = require('gray-matter')
 const mkdirp = require('mkdirp')
 const mustache = require('mustache')
+const sass = require('node-sass')
+const postcss = require('postcss')
 const sharp = require('sharp')
 const slugify = require('slugify')
 // Promisify.
@@ -57,7 +60,7 @@ function go () {
  */
 async function build () {
   // Clean public dir.
-  clean()
+  await clean()
   // Files.
   await buildFiles()
   // Assets.
@@ -131,8 +134,8 @@ async function buildIndex (contents, dirPath, title, slug) {
   await mkdirp.mkdirpAsync(path.join(site.publicDir, dirPath))
   // Order contents by date.
   contents.sort(function (a, b) {
-    return b.date.timestamp - a.date.timestamp;
-  });
+    return b.date.timestamp - a.date.timestamp
+  })
   // Paginate.
   const pagesNumber = Math.floor(contents.length / site.paginate) + 1
   const indexes = await Promise.all(Array(pagesNumber).fill(1).map(async (v, page) => {
@@ -505,11 +508,11 @@ async function logSite() {
 async function execAndLog (cmd) {
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
-      console.error(err);
-      return;
+      console.error(err)
+      return
     }
-    console.log(stdout);
-  });
+    console.log(stdout)
+  })
 }
 
 /**
@@ -556,8 +559,20 @@ async function buildImages () {
 async function buildCSS () {
   site.styles = []
   await mkdirp.mkdirpAsync(path.join(site.publicDir, 'css'))
-  await execAndLog(`node-sass --output-style compressed -o ${site.cwd}/${site.publicDir}/css ${site.cwd}/assets/scss`)
-  await execAndLog(`postcss -u autoprefixer -r ${site.cwd}/${site.publicDir}/css/app.css`)
+  const input = path.join(site.cwd, 'assets/scss/app.scss')
+  const output = path.join(site.cwd, site.publicDir, 'css/app.css')
+  sass.render({
+    file: input
+  }, async (err, sassResult) => {
+    if (err) {
+      console.error('[CSS] ' + err)
+    }
+    const postResult = await postcss([autoprefixer]).process(sassResult.css)
+    postResult.warnings().forEach(warn => {
+      console.warn('[CSS] ' + warn.toString())
+    })
+    fs.writeFileAsync(output, postResult.css)
+  })
   site.styles.push(path.join(site.basepath, 'css/app.css'))
 }
 
@@ -571,7 +586,7 @@ async function buildJS () {
     execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
     site.scripts.push(path.join(site.basepath, 'js/app.js'))
   }).catch(error => {
-    console.log('[JS] Dir assets/js does not exist.')
+    console.error('[JS] Dir assets/js does not exist.')
   })
 }
 
