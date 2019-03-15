@@ -60,7 +60,7 @@ function go () {
  */
 async function build () {
   // Clean public dir.
-  await clean()
+  clean()
   // Files.
   await buildFiles()
   // Assets.
@@ -73,7 +73,7 @@ async function build () {
   await buildContents(site.pagesDir)
   await buildContents(site.postsDir)
   await buildTaxonomies()
-  await buildIndex(site.posts, 'posts', 'Posts')
+  await buildIndex(site.posts, site.postsDir, 'Posts')
   await buildHome()
   await buildSitemap()
 }
@@ -84,10 +84,17 @@ async function build () {
  * @return array
  */
 async function buildContents (dir) {
-  // Make dir.
+  try {
+    fs.readdirSync(dir)
+  }
+  catch (err) {
+    console.log(`[Content] Dir ${dir} does not exist.`)
+    return
+  }
+  // Make public dir.
   await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
   // Files.
-  const files = await fs.readdirAsync(dir)
+  const files = fs.readdirAsync(dir)
   const contents = await Promise.all(files.map(async (filename) => {
     // Format file data.
     const file = await {
@@ -124,14 +131,20 @@ async function buildContents (dir) {
 /**
  * Build indexes HTML pages.
  * @param array contents
- * @param string dirPath
+ * @param string dir
  * @param string title
  * @param string slug
  * @return array indexes
  */
-async function buildIndex (contents, dirPath, title, slug) {
-  // Make dir.
-  await mkdirp.mkdirpAsync(path.join(site.publicDir, dirPath))
+async function buildIndex (contents, dir, title, slug) {
+  try {
+    fs.readdirSync(dir)
+  }
+  catch (err) {
+    return
+  }
+  // Make public dir.
+  await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
   // Order contents by date.
   contents.sort(function (a, b) {
     return b.date.timestamp - a.date.timestamp
@@ -162,12 +175,12 @@ async function buildIndex (contents, dirPath, title, slug) {
     const html = mustache.render(site.templates['layout'], layoutContent)
     // Write file.
     const filename = page === 0 ? `/index.html` : `/index-${page}.html`
-    fs.writeFileAsync(path.join(site.publicDir, dirPath, filename), html)
+    fs.writeFileAsync(path.join(site.publicDir, dir, filename), html)
     // Return index.
     const index = {
       title: title,
       body: articlesHtml,
-      url: path.join(dirPath, filename),
+      url: path.join(dir, filename),
       slug: slug ? slug : slugify(title, slugifyOptions)
     }
     site.indexes.push(index)
@@ -453,7 +466,7 @@ function defineSiteSettings () {
   const settings = {
     title: 'Tamago website',
     baseurl: '',
-    basepath: '',
+    basepath: '/',
     home: {
       where: 'indexes',
       slug: 'posts'
@@ -488,7 +501,7 @@ function defineSiteSettings () {
   Object.keys(settings).map(setting => {
     settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
   })
-  console.log(`Settings:`)
+  console.log('[Settings]')
   console.log(settings)
   site = settings
 }
