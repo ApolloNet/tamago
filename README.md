@@ -46,6 +46,7 @@ Settings.json can override these settings:
 - `title`: string
 - `baseurl`: string, like "http://example.com"
 - `basepath`: string, the subpath of the website, like `/blog`, defaults to `/`
+- `contentTypes`: array, defaults to `["pages", "posts"]`
 - `home`: object, see below for details
 - `paginate`: int, number of posts per page, default to 10
 - `taxonomiesNames`: array of taxonomy names, defaults to ['tags']
@@ -107,22 +108,22 @@ If your frontmatter has an 'address' field, it outputs has a map, via the [Leafl
 
 ⚠️ You must install Leaflet by yourself in the `assets/libs` folder.
 
-## Content object
-
-- title
-- body: partial html content
-- url
-- slug
-- each field found in the frontmatter: date, image, tags...
-- styles: array
-- scripts: array
-- hasImage: bool
-- imageDerivatives: object
-- taxonomies: object
-
 ## Templates
 
 The templating system is [Mustache](https://github.com/janl/mustache.js)
+
+### Content object
+
+- `title`
+- `body`: partial html content
+- `url`
+- `slug`
+- each field found in the frontmatter: date, image, tags...
+- `styles`: array
+- `scripts`: array
+- `hasImage`: bool
+- `imageDerivatives`: object
+- `taxonomies`: object
 
 ## Gitlab pages CI
 

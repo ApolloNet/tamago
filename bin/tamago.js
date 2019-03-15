@@ -70,62 +70,61 @@ async function build () {
   await buildJS()
   // Content.
   await loadTemplates()
-  await buildContents(site.pagesDir)
-  await buildContents(site.postsDir)
+  await buildContents()
   await buildTaxonomies()
-  await buildIndex(site.posts, site.postsDir, 'Posts')
+  await buildIndex(site.posts, 'posts', 'Posts')
   await buildHome()
   await buildSitemap()
 }
 
 /**
- * Build contents HTML pages.
- * @param string dir
- * @return array
+ * Build contents.
  */
-async function buildContents (dir) {
-  try {
-    fs.readdirSync(dir)
-  }
-  catch (err) {
-    console.log(`[Content] Dir ${dir} does not exist.`)
-    return
-  }
-  // Make public dir.
-  await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
-  // Files.
-  const files = fs.readdirAsync(dir)
-  const contents = await Promise.all(files.map(async (filename) => {
-    // Format file data.
-    const file = await {
-      basename: path.basename(filename, '.md'),
-      dir: dir,
-      path: path.join(dir, filename)
+async function buildContents () {
+  await Promise.all(site.contentTypes.map(async (dir) => {
+    try {
+      fs.readdirSync(dir)
     }
-    file.htmlpath = path.join(site.publicDir, dir, file.basename + '.html')
-    file.content = await fs.readFileAsync(file.path, 'utf-8')
-    file.variables = await fileFormatVariables(file)
-    // Build site taxonomies.
-    buildSiteTaxonomies(file)
-    // Article template.
-    const layoutContent = {
-      site: site,
-      styles: [...site.styles, file.variables.styles],
-      scripts: [...site.scripts, ...file.variables.scripts],
-      content: mustache.render(site.templates['article--full'], file.variables)
+    catch (err) {
+      console.log(`[Content] Dir ${dir} does not exist.`)
+      return
     }
-    // Layout template.
-    const html = mustache.render(site.templates['layout'], layoutContent)
-    // Write file.
-    fs.writeFileAsync(file.htmlpath, html)
-    // 404
-    if (file.basename === '404') {
-      ncp(file.htmlpath, path.join(site.publicDir, '404.html'), () => {})
-    }
-    // Return file variables object.
-    return file.variables
+    // Make public dir.
+    await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
+    // Files.
+    const files = fs.readdirAsync(dir)
+    const contents = await Promise.all(files.map(async (filename) => {
+      // Format file data.
+      const file = await {
+        basename: path.basename(filename, '.md'),
+        dir: dir,
+        path: path.join(dir, filename)
+      }
+      file.htmlpath = path.join(site.publicDir, dir, file.basename + '.html')
+      file.content = await fs.readFileAsync(file.path, 'utf-8')
+      file.variables = await fileFormatVariables(file)
+      // Build site taxonomies.
+      buildSiteTaxonomies(file)
+      // Article template.
+      const layoutContent = {
+        site: site,
+        styles: [...site.styles, file.variables.styles],
+        scripts: [...site.scripts, ...file.variables.scripts],
+        content: mustache.render(site.templates['article--full'], file.variables)
+      }
+      // Layout template.
+      const html = mustache.render(site.templates['layout'], layoutContent)
+      // Write file.
+      fs.writeFileAsync(file.htmlpath, html)
+      // 404
+      if (file.basename === '404') {
+        ncp(file.htmlpath, path.join(site.publicDir, '404.html'), () => {})
+      }
+      // Return file variables object.
+      return file.variables
+    }))
+    site[dir] = contents
   }))
-  site[dir] = contents
 }
 
 /**
@@ -267,7 +266,10 @@ async function buildHome () {
  * Build sitemap.
  */
 async function buildSitemap () {
-  const contents = [...site.pages, ...site.posts, ...site.indexes]
+  let contents = [...site.indexes]
+  site.contentTypes.map(type => {
+    contents = [...contents, ...site[type]]
+  })
   const contentsXml = contents.map(content => {
     const fullUrl = path.join(site.baseurl, site.basepath, content.url)
     return mustache.render(site.templates['article--sitemap'], {url: fullUrl})
@@ -475,8 +477,7 @@ function defineSiteSettings () {
     publicDir: 'public',
     paginate: 10,
     templatesDir: 'templates',
-    pagesDir: 'pages',
-    postsDir: 'posts',
+    contentTypes: ['pages', 'posts'],
     filesDir: 'files',
     taxonomiesNames: ['tags'],
     dateFormat: 'D MMMM YYYY',
@@ -494,12 +495,13 @@ function defineSiteSettings () {
       }
     ],
     templates: [],
-    posts: [],
-    pages: [],
     indexes: []
   }
   Object.keys(settings).map(setting => {
     settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
+  })
+  settings.contentTypes.map(type => {
+    settings[type] = []
   })
   console.log('[Settings]')
   console.log(settings)
