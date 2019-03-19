@@ -4,17 +4,15 @@
 // Requires.
 const process = require('process')
 const { exec } = require('child_process')
-const fs = require('fs')
 const path = require('path')
 const request = require('request')
 // Third parties.
 const autoprefixer = require('autoprefixer')
-const ncp = require('ncp')
 const fr = require('date-fns/locale/fr')
+const fs = require('fs-extra')
 const format = require('date-fns/format')
 const marked = require('marked')
 const matter = require('gray-matter')
-const mkdirp = require('mkdirp')
 const mustache = require('mustache')
 const sass = require('node-sass')
 const postcss = require('postcss')
@@ -24,7 +22,6 @@ const slugify = require('slugify')
 const Promise = require('bluebird')
 Promise.promisifyAll(fs)
 Promise.promisifyAll(request)
-Promise.promisifyAll(mkdirp)
 
 // Settings.
 let site = {}
@@ -83,20 +80,18 @@ async function build () {
  */
 async function buildContents () {
   await Promise.all(site.contentTypes.map(async (dir) => {
-    try {
-      fs.readdirSync(dir)
-    }
-    catch (err) {
+    const dirExists = fs.existsSync(dir)
+    if (!dirExists) {
       console.log(`[Content] Dir ${dir} does not exist.`)
       return
     }
     // Make public dir.
-    await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
+    fs.ensureDir(path.join(site.publicDir, dir))
     // Files.
     const files = fs.readdirAsync(dir)
     const contents = await Promise.all(files.map(async (filename) => {
       // Format file data.
-      const file = await {
+      const file = {
         basename: path.basename(filename, '.md'),
         dir: dir,
         path: path.join(dir, filename)
@@ -119,7 +114,9 @@ async function buildContents () {
       fs.writeFileAsync(file.htmlpath, html)
       // 404
       if (file.basename === '404') {
-        ncp(file.htmlpath, path.join(site.publicDir, '404.html'), () => {})
+        fs.copy(file.htmlpath, path.join(site.publicDir, '404.html'))
+          .then(() => console.log('[404] Done.'))
+          .catch(err => console.error('[404] ' + err))
       }
       // Return file variables object.
       return file.variables
@@ -137,14 +134,13 @@ async function buildContents () {
  * @return array indexes
  */
 async function buildIndex (contents, dir, title, slug) {
-  try {
-    fs.readdirSync(dir)
-  }
-  catch (err) {
+  const dirExists = fs.existsSync(dir)
+  if (!dirExists) {
+    console.log(`[Content] Dir ${dir} does not exist.`)
     return
   }
   // Make public dir.
-  await mkdirp.mkdirpAsync(path.join(site.publicDir, dir))
+  fs.ensureDir(path.join(site.publicDir, dir))
   // Order contents by date.
   contents.sort(function (a, b) {
     return b.date.timestamp - a.date.timestamp
@@ -331,7 +327,7 @@ async function formatImage (variables, field) {
   }
   const imagePath = variables[field]
   const imageBasename = path.basename(imagePath)
-  const imageExists = fs.statAsync(imagePath)
+  const imageExists = fs.existsSync(imagePath)
   if (!imageExists) {
     variables.hasImage = false
     return
@@ -344,7 +340,7 @@ async function formatImage (variables, field) {
     const formatDir = path.join(site.publicDir, site.filesDir, format.name)
     const outputPath = path.join(formatDir, imageBasename)
     const outputSrc = path.join(site.basepath, site.filesDir, format.name, imageBasename)
-    await mkdirp.mkdirpAsync(formatDir)
+    fs.ensureDir(formatDir)
     sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
     variables.imageDerivatives[format.name] = {
       src: outputSrc,
@@ -465,7 +461,7 @@ async function loadTemplates () {
 function defineSiteSettings () {
   const cwd = process.cwd()
   const settingsPath = path.join(cwd, '/settings.json')
-  const overrides = fs.statAsync(settingsPath) ? require(settingsPath) : []
+  const overrides = fs.existsSync(settingsPath) ? require(settingsPath) : []
   const settings = {
     title: 'Tamago website',
     baseurl: '',
@@ -510,63 +506,43 @@ function defineSiteSettings () {
 }
 
 /**
- * Log site datas.
- */
-async function logSite() {
-  const log = JSON.stringify(site)
-  fs.writeFileAsync('logs/log.log', log)
-}
-
-/**
- * Exec and log.
- * @param string cmd
- */
-async function execAndLog (cmd) {
-  exec(cmd, (err, stdout, stderr) => {
-    if (err) {
-      console.error(err)
-      return
-    }
-    console.log(stdout)
-  })
-}
-
-/**
  * Clean public dir.
  */
-async function clean () {
-  execAndLog(`rm -rf ${site.publicDir}/*`)
+function clean () {
+  fs.removeSync(site.publicDir)
 }
 
 /**
  * Build files.
  */
-async function buildFiles () {
-  await mkdirp.mkdirpAsync(path.join(site.publicDir, 'files'))
-  execAndLog(`cp -r files ${site.publicDir}/`)
+function buildFiles () {
+  const src = 'files'
+  const dest = path.join(site.publicDir, 'files')
+  fs.copy(src, dest)
+    .then(() => console.log('[Files] Done.'))
+    .catch(err => console.error('[Files] ' + err))
 }
 
 /**
  * Build libs.
  */
-async function buildLibs () {
-  fs.statAsync('assets/libs').then(async () => {
-    execAndLog(`cp -r assets/libs ${site.publicDir}/`)
-  }).catch(error => {
-    console.log('[Libs] Dir assets/libs does not exist.')
-  })
+function buildLibs () {
+  const src = 'assets/libs'
+  const dest = path.join(site.publicDir, src)
+  fs.copy(src, dest)
+    .then(() => console.log('[Libs] Done.'))
+    .catch(err => console.error('[Libs] ' + err))
 }
 
 /**
  * Build images.
  */
 async function buildImages () {
-  fs.statAsync('assets/img').then(async () => {
-    execAndLog(`cp -r assets/img ${site.publicDir}/`)
-    //execAndLog(`imagemin assets/img ${site.publicDir}/img -p`)
-  }).catch(error => {
-    console.log('[Img] Dir assets/img does not exist.')
-  })
+  const src = 'assets/img'
+  const dest = path.join(site.publicDir, src)
+  fs.copy(src, dest)
+    .then(() => console.log('[Img] Done.'))
+    .catch(err => console.error('[Img] ' + err))
 }
 
 /**
@@ -574,7 +550,7 @@ async function buildImages () {
  */
 async function buildCSS () {
   site.styles = []
-  await mkdirp.mkdirpAsync(path.join(site.publicDir, 'css'))
+  fs.ensureDir(path.join(site.publicDir, 'css'))
   const input = path.join(site.cwd, 'assets/scss/app.scss')
   const output = path.join(site.cwd, site.publicDir, 'css/app.css')
   sass.render({
@@ -583,7 +559,8 @@ async function buildCSS () {
     if (err) {
       console.error('[CSS] ' + err)
     }
-    const postResult = await postcss([autoprefixer]).process(sassResult.css)
+    const postResult = await postcss([autoprefixer])
+      .process(sassResult.css, {from: undefined})
     postResult.warnings().forEach(warn => {
       console.warn('[CSS] ' + warn.toString())
     })
@@ -597,25 +574,29 @@ async function buildCSS () {
  */
 async function buildJS () {
   site.scripts = []
-  fs.statAsync('assets/js').then(async () => {
-    await mkdirp.mkdirpAsync(path.join(site.publicDir, 'js'))
-    execAndLog(`cp -r assets/js ${site.publicDir}/`)
-    //execAndLog(`babel assets/js --out-file ${site.publicDir}/js/app.js`)
-    site.scripts.push(path.join(site.basepath, 'js/app.js'))
-  }).catch(error => {
-    console.error('[JS] Dir assets/js does not exist.')
-  })
+  const jsDir = 'assets/js'
+  const files = fs.readdirAsync(jsDir)
+  await Promise.all(files.map(async (filename) => {
+    const src = path.join(jsDir, filename)
+    const dest = path.join(site.publicDir, 'js', filename)
+    fs.copy(src, dest)
+      .then(() => {
+        site.scripts.push(path.join(site.basepath, 'js', filename))
+        console.log(`[JS] ${filename} copied`)
+      })
+      .catch(err => console.error('[JS] ' + err))
+  }))
 }
 
 /**
  * Build favicons.
  */
 function buildFavicons () {
-  fs.statAsync('assets/favicons').then(async () => {
-    execAndLog(`cp -r assets/favicons/* ${site.publicDir}/`)
-  }).catch(error => {
-    console.log('[Favicons] Dir assets/favicons does not exist.')
-  })
+  const src = 'assets/favicons'
+  const dest = path.join(site.publicDir)
+  fs.copy(src, dest)
+    .then(() => console.log('[Favicons] Done.'))
+    .catch(err => console.error('[Favicons] ' + err))
 }
 
 /**
@@ -632,10 +613,12 @@ async function init (name) {
     taxonomiesNames: ['tags']
   })
   // Create dirs.
-  await mkdirp.mkdirpAsync(nameSlug)
-  await mkdirp.mkdirpAsync(path.join(nameSlug, site.publicDir))
+  fs.ensureDir(nameSlug)
+  fs.ensureDir(path.join(nameSlug, site.publicDir))
   // Copy defaults.
-  ncp(defaultsDir, nameSlug, () => {})
+  fs.copy(defaultsDir, nameSlug)
+    .then(() => console.log('[Defaults] Done.'))
+    .catch(err => console.error('[Defaults] ' + err))
   // Create settings file.
   fs.writeFile(path.join(nameSlug, 'settings.json'), newSettings, 'utf8', () => {})
   // Log.
