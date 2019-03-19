@@ -68,6 +68,7 @@ async function build () {
   await buildImages()
   await buildCSS()
   await buildJS()
+  await buildFavicons()
   // Content.
   await loadTemplates()
   await buildContents()
@@ -603,6 +604,17 @@ async function buildJS () {
     site.scripts.push(path.join(site.basepath, 'js/app.js'))
   }).catch(error => {
     console.error('[JS] Dir assets/js does not exist.')
+  })
+}
+
+/**
+ * Build favicons.
+ */
+function buildFavicons () {
+  fs.statAsync('assets/favicons').then(async () => {
+    execAndLog(`cp -r assets/favicons/* ${site.publicDir}/`)
+  }).catch(error => {
+    console.log('[Favicons] Dir assets/favicons does not exist.')
   })
 }
 

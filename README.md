@@ -13,6 +13,7 @@ Static website generator, built with NodeJS.
 It creates the `website-name` folder with these sub-folders:
 
 - assets
+  - favicons
   - img
   - js
   - libs
@@ -38,6 +39,7 @@ It creates/updates the `public` folder with these sub-folders:
 - pages
 - posts
 - + a folder for each taxonomy
+- + favicons right here
 
 ## Settings
 
