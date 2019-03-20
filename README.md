@@ -14,6 +14,7 @@ It creates the `website-name` folder with these sub-folders:
 
 - assets
   - favicons
+  - fonts
   - img
   - js
   - libs
@@ -33,6 +34,7 @@ It creates/updates the `public` folder with these sub-folders:
 
 - css
 - files
+- fonts
 - img
 - js
 - libs
