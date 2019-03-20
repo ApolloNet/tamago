@@ -337,16 +337,18 @@ async function formatImage (variables, field) {
     original: variables[field]
   }
   await Promise.all(site.imageFormats.map(async (format) => {
-    const formatDir = path.join(site.publicDir, site.filesDir, format.name)
-    const outputPath = path.join(formatDir, imageBasename)
-    const outputSrc = path.join(site.basepath, site.filesDir, format.name, imageBasename)
-    fs.ensureDir(formatDir)
-    sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
-    variables.imageDerivatives[format.name] = {
-      src: outputSrc,
-      width: format.width,
-      height: format.height
-    }
+    site.filesDirs.map(dir => {
+      const formatDir = path.join(site.publicDir, dir, format.name)
+      const outputPath = path.join(formatDir, imageBasename)
+      const outputSrc = path.join(site.basepath, dir, format.name, imageBasename)
+      fs.ensureDir(formatDir)
+      sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
+      variables.imageDerivatives[format.name] = {
+        src: outputSrc,
+        width: format.width,
+        height: format.height
+      }
+    })
   }))
   return variables
 }
@@ -475,7 +477,7 @@ function defineSiteSettings () {
     paginate: 10,
     templatesDir: 'templates',
     contentTypes: ['pages', 'posts'],
-    filesDir: 'files',
+    filesDirs: ['files'],
     taxonomiesNames: ['tags'],
     dateFormat: 'D MMMM YYYY',
     mapZoom: 12,
@@ -516,11 +518,12 @@ function clean () {
  * Build files.
  */
 function buildFiles () {
-  const src = 'files'
-  const dest = path.join(site.publicDir, 'files')
-  fs.copy(src, dest)
-    .then(() => console.log('[Files] Done.'))
-    .catch(err => console.error('[Files] ' + err))
+  site.filesDirs.map(src => {
+    const dest = path.join(site.publicDir, src)
+    fs.copy(src, dest)
+      .then(() => console.log(`[${src}] Done.`))  
+      .catch(err => console.error(`[${src}] ` + err))
+  })
 }
 
 /**
