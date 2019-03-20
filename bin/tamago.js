@@ -65,6 +65,7 @@ async function build () {
   await buildImages()
   await buildCSS()
   await buildJS()
+  await buildFonts()
   await buildFavicons()
   // Content.
   await loadTemplates()
@@ -553,7 +554,7 @@ async function buildImages () {
  */
 async function buildCSS () {
   site.styles = []
-  fs.ensureDir(path.join(site.publicDir, 'css'))
+  await fs.ensureDir(path.join(site.publicDir, 'css'))
   const input = path.join(site.cwd, 'assets/scss/app.scss')
   const output = path.join(site.cwd, site.publicDir, 'css/app.css')
   sass.render({
@@ -568,6 +569,7 @@ async function buildCSS () {
       console.warn('[CSS] ' + warn.toString())
     })
     fs.writeFileAsync(output, postResult.css)
+    console.log('[CSS] Done.')
   })
   site.styles.push(path.join(site.basepath, 'css/app.css'))
 }
@@ -589,6 +591,17 @@ async function buildJS () {
       })
       .catch(err => console.error('[JS] ' + err))
   }))
+}
+
+/**
+ * Build fonts.
+ */
+function buildFonts () {
+  const src = 'assets/fonts'
+  const dest = path.join(site.publicDir, 'fonts')
+  fs.copy(src, dest)
+    .then(() => console.log('[Fonts] Done.'))
+    .catch(err => console.error('[Fonts] ' + err))
 }
 
 /**
