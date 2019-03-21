@@ -14,13 +14,13 @@ const format = require('date-fns/format')
 const marked = require('marked')
 const matter = require('gray-matter')
 const mustache = require('mustache')
+const recursive = require('recursive-readdir');
 const sass = require('node-sass')
 const postcss = require('postcss')
 const sharp = require('sharp')
 const slugify = require('slugify')
 // Promisify.
 const Promise = require('bluebird')
-Promise.promisifyAll(fs)
 Promise.promisifyAll(request)
 
 // Settings.
@@ -53,77 +53,175 @@ function go () {
 }
 
 /**
- * Build.
+ * Parse directories.
  */
 async function build () {
   // Clean public dir.
-  clean()
-  // Files.
-  await buildFiles()
-  // Assets.
-  await buildLibs()
-  await buildImages()
-  await buildCSS()
-  await buildJS()
-  await buildFonts()
-  await buildFavicons()
-  // Content.
-  await loadTemplates()
-  await buildContents()
-  await buildTaxonomies()
-  await buildIndex(site.posts, 'posts', 'Posts')
-  await buildHome()
-  await buildSitemap()
+  fs.removeSync(site.publicDir)
+  // Files builds.
+  const files = await recursive('.', site.ignoreDirs)
+  await Promise.all(files.map(async filepath => {
+    const file = createFileObject(filepath)
+    const buildFunction = getBuildFunction(file.dir)
+    if (!buildFunction) {
+      return
+    }
+    await buildFunction(file)
+  }))
+  // Other builds.
+  buildTaxonomies()
+  if (site.posts) {
+    buildIndex(site.posts, 'posts', 'Posts')
+  }
+  buildHome()
+  buildSitemap()
+}
+
+/**
+ * Create file object.
+ * @param string filepath
+ * @return object file
+ */
+function createFileObject (filepath) {
+  const file = {}
+  file.path = filepath
+  file.dir = path.dirname(file.path)
+  file.ext = path.extname(file.path)
+  file.name  = path.basename(file.path, file.ext)
+  file.slug = slugify(file.name, slugifyOptions)
+  return file
+}
+
+/**
+ * Get build function.
+ * @param string dir
+ * @return function
+ */
+function getBuildFunction (dir) {
+  const builds = new Map();
+  builds.set('assets/favicons', buildCopy)
+  builds.set('assets/fonts', buildCopy)
+  builds.set('assets/img', buildCopy)
+  builds.set('assets/libs', buildCopy)
+  builds.set('assets/scss', buildCSS)
+  builds.set('assets/js', buildJS)
+  builds.set(site.templatesDir, loadTemplate)
+  site.contentTypes.map(contentType => {
+    builds.set(contentType, buildContent)
+  })
+  site.filesDirs.map(filesDir => {
+    builds.set(filesDir, buildCopy)
+  })
+  return builds.get(dir)
+}
+
+/**
+ * Copy a file to the public directory.
+ * @param object file
+ */
+function buildCopy (file) {
+  file.pathSegments = file.path.split(path.sep)
+  const destDir = file.dir === 'assets/favicons' 
+    ? site.publicDir
+    : path.join(site.publicDir, file.dir)
+  const dest = path.join(destDir, file.name + file.ext)
+  fs.ensureDirSync(destDir)
+  fs.copy(file.path, dest)
+    .then(() => console.log(`${file.path} copied`))
+    .catch(err => console.error(err))
 }
 
 /**
  * Build contents.
+ * @param object file
  */
-async function buildContents () {
-  await Promise.all(site.contentTypes.map(async (dir) => {
-    const dirExists = fs.existsSync(dir)
-    if (!dirExists) {
-      console.log(`[Content] Dir ${dir} does not exist.`)
-      return
+async function buildContent (file) {
+  fs.ensureDirSync(path.join(site.publicDir, file.dir))
+  // File data.
+  file.htmlpath = path.join(site.publicDir, file.dir, file.name + '.html')
+  file.content = fs.readFileSync(file.path)
+  file.variables = await fileFormatVariables(file)
+  // Build site taxonomies.
+  buildSiteTaxonomies(file)
+  // Write HTML.
+  const layoutContent = {
+    site: site,
+    styles: [...site.styles, ...file.variables.styles],
+    scripts: [...site.scripts, ...file.variables.scripts],
+    content: mustache.render(site.templates['article--full'], file.variables)
+  }
+  const html = mustache.render(site.templates['layout'], layoutContent)
+  fs.writeFile(file.htmlpath, html)
+    .then(() => console.log(`${file.path} built`))
+    .catch(err => console.error(err))
+  // 404.
+  if (file.name === '404') {
+    fs.copy(file.htmlpath, path.join(site.publicDir, '404.html'))
+      .then(() => console.log('404.html created'))
+      .catch(err => console.error(err))
+  }
+  // Load file variables in the site object.
+  site[file.dir].push(file.variables)
+}
+
+/**
+ * Build taxonomies object.
+ * @param object file
+ * @return object file
+ */
+function buildSiteTaxonomies (file) {
+  if (!file.variables.taxonomies) {
+    return
+  }
+  if (!site.hasOwnProperty('taxonomies')) {
+    site.taxonomies = []
+  }
+  // Each taxonomy.
+  Object.keys(file.variables.taxonomies).map(key => {
+    const taxonomy = file.variables.taxonomies[key]
+    let taxoIndex = site.taxonomies.findIndex(siteTaxo => {
+      return siteTaxo.name === taxonomy.name
+    })
+    if (taxoIndex === -1) {
+      site.taxonomies.push({
+        name: taxonomy.name,
+        slug: slugify(taxonomy.name, slugifyOptions),
+        terms: []
+      })
+      taxoIndex = site.taxonomies.length - 1
     }
-    // Make public dir.
-    fs.ensureDir(path.join(site.publicDir, dir))
-    // Files.
-    const files = fs.readdirAsync(dir)
-    const contents = await Promise.all(files.map(async (filename) => {
-      // Format file data.
-      const file = {
-        basename: path.basename(filename, '.md'),
-        dir: dir,
-        path: path.join(dir, filename)
+    // Each term.
+    Object.keys(taxonomy.terms).map(key => {
+      const term = taxonomy.terms[key]
+      let termIndex = site.taxonomies[taxoIndex].terms.findIndex(siteTerm => {
+        return siteTerm.name === term.name
+      })
+      if (termIndex === -1) {
+        const termObject = createTerm(taxonomy.name, term.name)
+        site.taxonomies[taxoIndex].terms.push(termObject)
+        termIndex = site.taxonomies[taxoIndex].terms.length - 1
+        site.taxonomies[taxoIndex].terms[termIndex].posts = []
       }
-      file.htmlpath = path.join(site.publicDir, dir, file.basename + '.html')
-      file.content = await fs.readFileAsync(file.path, 'utf-8')
-      file.variables = await fileFormatVariables(file)
-      // Build site taxonomies.
-      buildSiteTaxonomies(file)
-      // Article template.
-      const layoutContent = {
-        site: site,
-        styles: [...site.styles, file.variables.styles],
-        scripts: [...site.scripts, ...file.variables.scripts],
-        content: mustache.render(site.templates['article--full'], file.variables)
-      }
-      // Layout template.
-      const html = mustache.render(site.templates['layout'], layoutContent)
-      // Write file.
-      fs.writeFileAsync(file.htmlpath, html)
-      // 404
-      if (file.basename === '404') {
-        fs.copy(file.htmlpath, path.join(site.publicDir, '404.html'))
-          .then(() => console.log('[404] Done.'))
-          .catch(err => console.error('[404] ' + err))
-      }
-      // Return file variables object.
-      return file.variables
-    }))
-    site[dir] = contents
-  }))
+      site.taxonomies[taxoIndex].terms[termIndex].posts.push(file.variables)
+    })
+  })
+  return file
+}
+
+/**
+ * Build taxonomies.
+ * @return indexes
+ */
+function buildTaxonomies () {
+  if (!site.taxonomies) {
+    return
+  }
+  site.taxonomies.map(taxonomy => {
+    taxonomy.terms.map(term => {
+      const slug = taxonomy.slug + '-' + term.slug
+      buildIndex(term.posts, term.path, term.name, slug)
+    })
+  })
 }
 
 /**
@@ -135,13 +233,7 @@ async function buildContents () {
  * @return array indexes
  */
 async function buildIndex (contents, dir, title, slug) {
-  const dirExists = fs.existsSync(dir)
-  if (!dirExists) {
-    console.log(`[Content] Dir ${dir} does not exist.`)
-    return
-  }
-  // Make public dir.
-  fs.ensureDir(path.join(site.publicDir, dir))
+  fs.ensureDirSync(path.join(site.publicDir, dir))
   // Order contents by date.
   contents.sort(function (a, b) {
     return b.date.timestamp - a.date.timestamp
@@ -172,7 +264,9 @@ async function buildIndex (contents, dir, title, slug) {
     const html = mustache.render(site.templates['layout'], layoutContent)
     // Write file.
     const filename = page === 0 ? `/index.html` : `/index-${page}.html`
-    fs.writeFileAsync(path.join(site.publicDir, dir, filename), html)
+    fs.writeFile(path.join(site.publicDir, dir, filename), html)
+      .then(() => console.log(`${filename} index created`))
+      .catch(err => console.log(err))
     // Return index.
     const index = {
       title: title,
@@ -185,70 +279,11 @@ async function buildIndex (contents, dir, title, slug) {
 }
 
 /**
- * Build taxonomies object.
- * @param object file
- * @return object file
- */
-async function buildSiteTaxonomies (file) {
-  if (!file.variables.taxonomies) {
-    return
-  }
-  if (!site.hasOwnProperty('taxonomies')) {
-    site.taxonomies = []
-  }
-  // Each taxonomy.
-  await Promise.all(Object.entries(file.variables.taxonomies).map(async (taxonomyArray) => {
-    const taxonomy = taxonomyArray[1]
-    let taxoIndex = site.taxonomies.findIndex(siteTaxo => {
-      return siteTaxo.name === taxonomy.name
-    })
-    if (taxoIndex === -1) {
-      site.taxonomies.push({
-        name: taxonomy.name,
-        slug: slugify(taxonomy.name, slugifyOptions),
-        terms: []
-      })
-      taxoIndex = site.taxonomies.length - 1
-    }
-    // Each term.
-    await Promise.all(Object.entries(taxonomy.terms).map(async (termArray) => {
-      const term = termArray[1]
-      let termIndex = site.taxonomies[taxoIndex].terms.findIndex(siteTerm => {
-        return siteTerm.name === term.name
-      })
-      if (termIndex === -1) {
-        const termObject = createTerm(taxonomy.name, term.name)
-        site.taxonomies[taxoIndex].terms.push(termObject)
-        termIndex = site.taxonomies[taxoIndex].terms.length - 1
-        site.taxonomies[taxoIndex].terms[termIndex].posts = []
-      }
-      site.taxonomies[taxoIndex].terms[termIndex].posts.push(file.variables)
-    }))
-  }))
-  return file
-}
-
-/**
- * Build taxonomies.
- * @return indexes
- */
-async function buildTaxonomies () {
-  if (!site.taxonomies) {
-    return
-  }
-  await Promise.all(site.taxonomies.map(async (taxonomy) => {
-    await Promise.all(taxonomy.terms.map(async (term) => {
-      const slug = taxonomy.slug + '-' + term.slug
-      await buildIndex (term.posts, term.path, term.name, slug)
-    }))
-  }))
-}
-
-/**
  * Build homepage.
  */
 async function buildHome () {
   const home = await getContent(site.home.where, site.home.slug)
+  const output = path.join(site.publicDir, 'index.html')
   const homeContent = {
     site: site,
     title: home.title,
@@ -257,7 +292,10 @@ async function buildHome () {
     content: home.body
   }
   const html = mustache.render(site.templates['layout'], homeContent)
-  fs.writeFileAsync(path.join(site.publicDir, 'index.html'), html)
+  fs.writeFile(output, html)
+    .then(() => console.log('home built'))
+    .catch(err => console.log(err))
+  console.log(`${output} created`)
 }
 
 /**
@@ -273,7 +311,7 @@ async function buildSitemap () {
     return mustache.render(site.templates['article--sitemap'], {url: fullUrl})
   }).join('\n')
   const xml = mustache.render(site.templates['sitemap'], {content: contentsXml})
-  fs.writeFileAsync(path.join(site.publicDir, 'sitemap.xml'), xml)
+  fs.writeFile(path.join(site.publicDir, 'sitemap.xml'), xml)
 }
 
 /**
@@ -285,8 +323,8 @@ async function fileFormatVariables (file) {
   const frontmatter = await matter(file.content)
   const variables = frontmatter.data
   variables.body = await marked(frontmatter.content)
-  variables.url = path.join(site.basepath, file.dir, file.basename + '.html')
-  variables.slug = slugify(file.basename, slugifyOptions)
+  variables.url = path.join(site.basepath, file.dir, file.name + '.html')
+  variables.slug = slugify(file.name, slugifyOptions)
   variables.styles = []
   variables.scripts = []
   formatDate(variables, 'date')
@@ -342,7 +380,7 @@ async function formatImage (variables, field) {
       const formatDir = path.join(site.publicDir, dir, format.name)
       const outputPath = path.join(formatDir, imageBasename)
       const outputSrc = path.join(site.basepath, dir, format.name, imageBasename)
-      fs.ensureDir(formatDir)
+      fs.ensureDirSync(formatDir)
       sharp(imagePath).resize(format.width, format.height).toFile(outputPath)
       variables.imageDerivatives[format.name] = {
         src: outputSrc,
@@ -398,7 +436,7 @@ async function formatGeo (variables, field) {
       'Referer': 'http://localhost/'
     }
   }
-  const res = await request.getAsync(options)
+  const res = request.get(options)
   if (res.statusCode !== 200) {
     return
   }
@@ -445,17 +483,13 @@ function createTerm(taxonomy, term) {
 }
 
 /**
- * Load templates.
- * @return object templates.
+ * Load template.
+ * @param object file
  */
-async function loadTemplates () {
-  const files = await fs.readdirAsync(site.templatesDir)
-  await Promise.all(files.map(async (filename) => {
-    const templateName = path.basename(filename, '.mustache')
-    const templatePath = path.join(site.templatesDir, filename)
-    const templateContent = await fs.readFileAsync(templatePath, 'utf-8')
-    site.templates[templateName] = templateContent.toString()
-  }))
+function loadTemplate (file) {
+  const template = fs.readFileSync(file.path)
+  site.templates[file.name] = template.toString()
+  console.log(`${file.path} template loaded`)
 }
 
 /**
@@ -479,6 +513,7 @@ function defineSiteSettings () {
     templatesDir: 'templates',
     contentTypes: ['pages', 'posts'],
     filesDirs: ['files'],
+    ignoreDirs: ['.git', 'public'],
     taxonomiesNames: ['tags'],
     dateFormat: 'D MMMM YYYY',
     mapZoom: 12,
@@ -495,7 +530,9 @@ function defineSiteSettings () {
       }
     ],
     templates: [],
-    indexes: []
+    indexes: [],
+    styles: [],
+    scripts: []
   }
   Object.keys(settings).map(setting => {
     settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
@@ -503,116 +540,48 @@ function defineSiteSettings () {
   settings.contentTypes.map(type => {
     settings[type] = []
   })
-  console.log('[Settings]')
-  console.log(settings)
+  //console.log(settings)
   site = settings
 }
 
 /**
- * Clean public dir.
- */
-function clean () {
-  fs.removeSync(site.publicDir)
-}
-
-/**
- * Build files.
- */
-function buildFiles () {
-  site.filesDirs.map(src => {
-    const dest = path.join(site.publicDir, src)
-    fs.copy(src, dest)
-      .then(() => console.log(`[${src}] Done.`))  
-      .catch(err => console.error(`[${src}] ` + err))
-  })
-}
-
-/**
- * Build libs.
- */
-function buildLibs () {
-  const src = 'assets/libs'
-  const dest = path.join(site.publicDir, src)
-  fs.copy(src, dest)
-    .then(() => console.log('[Libs] Done.'))
-    .catch(err => console.error('[Libs] ' + err))
-}
-
-/**
- * Build images.
- */
-async function buildImages () {
-  const src = 'assets/img'
-  const dest = path.join(site.publicDir, src)
-  fs.copy(src, dest)
-    .then(() => console.log('[Img] Done.'))
-    .catch(err => console.error('[Img] ' + err))
-}
-
-/**
  * Build CSS.
+ * @param object file
  */
-async function buildCSS () {
-  site.styles = []
-  await fs.ensureDir(path.join(site.publicDir, 'css'))
-  const input = path.join(site.cwd, 'assets/scss/app.scss')
-  const output = path.join(site.cwd, site.publicDir, 'css/app.css')
+function buildCSS (file) {
+  if (file.name[0] === '_') {
+    return
+  }
+  file.dir = 'assets/css'
+  fs.ensureDirSync(path.join(site.publicDir, file.dir))
+  const output = {
+    path: path.join(site.cwd, site.publicDir, file.dir, file.name + '.css'),
+    url: path.join(site.basepath, file.dir, file.name + '.css')
+  }
   sass.render({
-    file: input
+    file: file.path
   }, async (err, sassResult) => {
     if (err) {
-      console.error('[CSS] ' + err)
+      console.error(err)
     }
     const postResult = await postcss([autoprefixer])
       .process(sassResult.css, {from: undefined})
     postResult.warnings().forEach(warn => {
-      console.warn('[CSS] ' + warn.toString())
+      console.warn(warn.toString())
     })
-    fs.writeFileAsync(output, postResult.css)
-    console.log('[CSS] Done.')
+    fs.writeFile(output.path, postResult.css)
+    console.log(`${file.path} built`)
   })
-  site.styles.push(path.join(site.basepath, 'css/app.css'))
+  site.styles.push(output.url)
 }
 
 /**
  * Build JS.
+ * @param object file
  */
-async function buildJS () {
-  site.scripts = []
-  const jsDir = 'assets/js'
-  const files = fs.readdirAsync(jsDir)
-  await Promise.all(files.map(async (filename) => {
-    const src = path.join(jsDir, filename)
-    const dest = path.join(site.publicDir, 'js', filename)
-    fs.copy(src, dest)
-      .then(() => {
-        site.scripts.push(path.join(site.basepath, 'js', filename))
-        console.log(`[JS] ${filename} copied`)
-      })
-      .catch(err => console.error('[JS] ' + err))
-  }))
-}
-
-/**
- * Build fonts.
- */
-function buildFonts () {
-  const src = 'assets/fonts'
-  const dest = path.join(site.publicDir, 'fonts')
-  fs.copy(src, dest)
-    .then(() => console.log('[Fonts] Done.'))
-    .catch(err => console.error('[Fonts] ' + err))
-}
-
-/**
- * Build favicons.
- */
-function buildFavicons () {
-  const src = 'assets/favicons'
-  const dest = path.join(site.publicDir)
-  fs.copy(src, dest)
-    .then(() => console.log('[Favicons] Done.'))
-    .catch(err => console.error('[Favicons] ' + err))
+function buildJS (file) {
+  buildCopy(file)
+  site.scripts.push(path.join(site.basepath, file.dir, file.name + file.ext))
 }
 
 /**
@@ -629,8 +598,8 @@ async function init (name) {
     taxonomiesNames: ['tags']
   })
   // Create dirs.
-  fs.ensureDir(nameSlug)
-  fs.ensureDir(path.join(nameSlug, site.publicDir))
+  fs.ensureDirSync(nameSlug)
+  fs.ensureDirSync(path.join(nameSlug, site.publicDir))
   // Copy defaults.
   fs.copy(defaultsDir, nameSlug)
     .then(() => console.log('[Defaults] Done.'))

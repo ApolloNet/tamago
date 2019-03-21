@@ -32,12 +32,13 @@ It creates the `website-name` folder with these sub-folders:
 
 It creates/updates the `public` folder with these sub-folders:
 
-- css
+- assets
+  - css
+  - fonts
+  - img
+  - js
+  - libs
 - files
-- fonts
-- img
-- js
-- libs
 - pages
 - posts
 - + a folder for each taxonomy
