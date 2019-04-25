@@ -497,7 +497,7 @@ function loadTemplate (file) {
  */
 function defineSiteSettings () {
   const cwd = process.cwd()
-  const settingsPath = path.join(cwd, '/settings.json')
+  const settingsPath = path.join(cwd, 'settings.json')
   const overrides = fs.existsSync(settingsPath) ? require(settingsPath) : []
   const settings = {
     title: 'Tamago website',
