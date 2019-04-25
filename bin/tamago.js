@@ -20,9 +20,6 @@ const postcss = require('postcss')
 const sharp = require('sharp')
 const slugify = require('slugify')
 
-// Settings.
-let site = {}
-
 // Variables.
 const slugifyOptions = {
   remove: /[*+~.()'"!:@]/g,
@@ -36,14 +33,14 @@ go()
  * Go.
  */
 function go () {
-  defineSiteSettings()
+  const site = defineSiteSettings()
   const args = process.argv.slice(2)
   if (args[0] === 'init' && args[1]) {
-    init(args[1])
+    init(site, args[1])
     return
   }
   if (args[0] === 'build') {
-    build()
+    build(site)
     return
   }
   help()
@@ -51,27 +48,35 @@ function go () {
 
 /**
  * Parse directories.
+ * @param object site
  */
-async function build () {
+async function build (site) {
+  const buildFunctions = getBuildFunctions(site)
   // Clean public dir.
   fs.removeSync(site.publicDir)
+  // Templates.
+  const templateFiles = await recursive(site.templatesDir)
+  templateFiles.map(filepath => {
+    const file = createFileObject(filepath)
+    loadTemplate(site, file)
+  })
   // Files builds.
   const files = await recursive('.', site.ignoreDirs)
-  await Promise.all(files.map(async filepath => {
+  files.map(filepath => {
     const file = createFileObject(filepath)
-    const buildFunction = getBuildFunction(file.dir)
+    const buildFunction = buildFunctions.get(file.dir)
     if (!buildFunction) {
       return
     }
-    await buildFunction(file)
-  }))
+    site = buildFunction(site, file)
+  })
   // Other builds.
-  buildTaxonomies()
+  site = buildTaxonomies(site)
   if (site.posts) {
-    buildIndex(site.posts, 'posts', 'Posts')
+    site = await buildIndex(site, site.posts, 'posts', 'Posts')
   }
-  buildHome()
-  buildSitemap()
+  buildHome(site)
+  buildSitemap(site)
 }
 
 /**
@@ -91,10 +96,10 @@ function createFileObject (filepath) {
 
 /**
  * Get build function.
- * @param string dir
- * @return function
+ * @param object site
+ * @return Map functions
  */
-function getBuildFunction (dir) {
+function getBuildFunctions (site) {
   const builds = new Map();
   builds.set('assets/favicons', buildCopy)
   builds.set('assets/fonts', buildCopy)
@@ -102,21 +107,21 @@ function getBuildFunction (dir) {
   builds.set('assets/libs', buildCopy)
   builds.set('assets/scss', buildCSS)
   builds.set('assets/js', buildJS)
-  builds.set(site.templatesDir, loadTemplate)
   site.contentTypes.map(contentType => {
     builds.set(contentType, buildContent)
   })
   site.filesDirs.map(filesDir => {
     builds.set(filesDir, buildCopy)
   })
-  return builds.get(dir)
+  return builds
 }
 
 /**
  * Copy a file to the public directory.
+ * @param object site
  * @param object file
  */
-function buildCopy (file) {
+function buildCopy (site, file) {
   file.pathSegments = file.path.split(path.sep)
   const destDir = file.dir === 'assets/favicons' 
     ? site.publicDir
@@ -126,20 +131,22 @@ function buildCopy (file) {
   fs.copy(file.path, dest)
     .then(() => console.log(`${file.path} copied`))
     .catch(err => console.error(err))
+  return site
 }
 
 /**
  * Build contents.
+ * @param object site
  * @param object file
  */
-async function buildContent (file) {
+function buildContent (site, file) {
   fs.ensureDirSync(path.join(site.publicDir, file.dir))
   // File data.
   file.htmlpath = path.join(site.publicDir, file.dir, file.name + '.html')
   file.content = fs.readFileSync(file.path)
-  file.variables = await fileFormatVariables(file)
+  file.variables = fileFormatVariables(site, file)
   // Build site taxonomies.
-  buildSiteTaxonomies(file)
+  buildSiteTaxonomies(site, file)
   // Write HTML.
   const layoutContent = {
     site: site,
@@ -159,14 +166,16 @@ async function buildContent (file) {
   }
   // Load file variables in the site object.
   site[file.dir].push(file.variables)
+  return site
 }
 
 /**
  * Build taxonomies object.
+ * @param object site
  * @param object file
  * @return object file
  */
-function buildSiteTaxonomies (file) {
+function buildSiteTaxonomies (site, file) {
   if (!file.variables.taxonomies) {
     return
   }
@@ -194,7 +203,7 @@ function buildSiteTaxonomies (file) {
         return siteTerm.name === term.name
       })
       if (termIndex === -1) {
-        const termObject = createTerm(taxonomy.name, term.name)
+        const termObject = createTerm(site, taxonomy.name, term.name)
         site.taxonomies[taxoIndex].terms.push(termObject)
         termIndex = site.taxonomies[taxoIndex].terms.length - 1
         site.taxonomies[taxoIndex].terms[termIndex].posts = []
@@ -207,29 +216,32 @@ function buildSiteTaxonomies (file) {
 
 /**
  * Build taxonomies.
+ * @param object site
  * @return indexes
  */
-function buildTaxonomies () {
+function buildTaxonomies (site) {
   if (!site.taxonomies) {
     return
   }
   site.taxonomies.map(taxonomy => {
-    taxonomy.terms.map(term => {
+    taxonomy.terms.map(async (term) => {
       const slug = taxonomy.slug + '-' + term.slug
-      buildIndex(term.posts, term.path, term.name, slug)
+      await buildIndex(site, term.posts, term.path, term.name, slug)
     })
   })
+  return site
 }
 
 /**
  * Build indexes HTML pages.
+ * @param object site
  * @param array contents
  * @param string dir
  * @param string title
  * @param string slug
  * @return array indexes
  */
-async function buildIndex (contents, dir, title, slug) {
+async function buildIndex (site, contents, dir, title, slug) {
   fs.ensureDirSync(path.join(site.publicDir, dir))
   // Order contents by date.
   contents.sort(function (a, b) {
@@ -237,7 +249,7 @@ async function buildIndex (contents, dir, title, slug) {
   })
   // Paginate.
   const pagesNumber = Math.floor(contents.length / site.paginate) + 1
-  const indexes = await Promise.all(Array(pagesNumber).fill(1).map(async (v, page) => {
+  const indexes = await Array(pagesNumber).fill(1).map((v, page) => {
     const begin = page * site.paginate
     const end = page * site.paginate + site.paginate
     // Article template.
@@ -272,14 +284,16 @@ async function buildIndex (contents, dir, title, slug) {
       slug: slug ? slug : slugify(title, slugifyOptions)
     }
     site.indexes.push(index)
-  }))
+  })
+  return site
 }
 
 /**
  * Build homepage.
+ * @param object site
  */
-async function buildHome () {
-  const home = await getContent(site.home.where, site.home.slug)
+function buildHome (site) {
+  const home = getContent(site, site.home.where, site.home.slug)
   const output = path.join(site.publicDir, 'index.html')
   const homeContent = {
     site: site,
@@ -297,8 +311,9 @@ async function buildHome () {
 
 /**
  * Build sitemap.
+ * @param object site
  */
-async function buildSitemap () {
+function buildSitemap (site) {
   let contents = [...site.indexes]
   site.contentTypes.map(type => {
     contents = [...contents, ...site[type]]
@@ -313,31 +328,33 @@ async function buildSitemap () {
 
 /**
  * Format variables.
+ * @param object site
  * @param object file
  * @return array variables
  */
-async function fileFormatVariables (file) {
-  const frontmatter = await matter(file.content)
+function fileFormatVariables (site, file) {
+  const frontmatter = matter(file.content)
   const variables = frontmatter.data
-  variables.body = await marked(frontmatter.content)
+  variables.body = marked(frontmatter.content)
   variables.url = path.join(site.basepath, file.dir, file.name + '.html')
   variables.slug = slugify(file.name, slugifyOptions)
   variables.styles = []
   variables.scripts = []
-  formatDate(variables, 'date')
-  await formatImage(variables, 'image')
-  formatTaxonomies(variables)
-  await formatGeo(variables, 'address')
+  formatDate(site, variables, 'date')
+  formatImage(site, variables, 'image')
+  formatTaxonomies(site, variables)
+  formatGeo(site, variables, 'address')
   return variables
 }
 
 /**
  * Format date.
+ * @param object site
  * @param object variables
  * @param string field
  * @return object variables
  */
-function formatDate (variables, field) {
+function formatDate (site, variables, field) {
   if (!variables[field]) {
     return
   }
@@ -352,11 +369,12 @@ function formatDate (variables, field) {
 
 /**
  * Format image.
+ * @param object site
  * @param object variables
  * @param string image
  * @return object variables
  */
-async function formatImage (variables, field) {
+function formatImage (site, variables, field) {
   if (!variables[field]) {
     variables.hasImage = false
     return
@@ -372,7 +390,7 @@ async function formatImage (variables, field) {
   variables.imageDerivatives = {
     original: variables[field]
   }
-  await Promise.all(site.imageFormats.map(async (format) => {
+  site.imageFormats.map(format => {
     site.filesDirs.map(dir => {
       const formatDir = path.join(site.publicDir, dir, format.name)
       const outputPath = path.join(formatDir, imageBasename)
@@ -385,22 +403,23 @@ async function formatImage (variables, field) {
         height: format.height
       }
     })
-  }))
+  })
   return variables
 }
 
 /**
  * Format taxonomies.
+ * @param object site
  * @param object variables
  * @return object variables
  */
-function formatTaxonomies (variables) {
+function formatTaxonomies (site, variables) {
   site.taxonomiesNames.map(taxonomyName => {
     if (!variables[taxonomyName]) {
       return
     }
     const terms = variables[taxonomyName].map(termName => {
-      return createTerm(taxonomyName, termName)
+      return createTerm(site, taxonomyName, termName)
     })
     variables.taxonomies = {
       [taxonomyName]: {
@@ -416,11 +435,12 @@ function formatTaxonomies (variables) {
 
 /**
  * Format geo from address string.
+ * @param object site
  * @param object variables
  * @param string field
  * @return object variables
  */
-async function formatGeo (variables, field) {
+function formatGeo (site, variables, field) {
   if (!variables[field]) {
     return
   }
@@ -452,27 +472,29 @@ async function formatGeo (variables, field) {
 
 /**
  * Get content.
+ * @param object site
  * @param string dir
  * @param string slug
  * @return object content
  */
-async function getContent (dir, slug) {
+function getContent (site, dir, slug) {
   let output = null
-  await Promise.all(site[dir].map(async (content) => {
+  site[dir].map(content => {
     if (content.slug === slug) {
       output = content
     }
-  }))
+  })
   return output
 }
 
 /**
  * Create taxonomy term object.
+ * @param object site
  * @param string taxonomy
  * @param string term name
  * @return term object
  */
-function createTerm(taxonomy, term) {
+function createTerm(site, taxonomy, term) {
   const taxoSlug = slugify(taxonomy, slugifyOptions)
   const termSlug = slugify(term, slugifyOptions)
   return {
@@ -485,22 +507,25 @@ function createTerm(taxonomy, term) {
 
 /**
  * Load template.
+ * @param object site
  * @param object file
  */
-function loadTemplate (file) {
+function loadTemplate (site, file) {
   const template = fs.readFileSync(file.path)
   site.templates[file.name] = template.toString()
   console.log(`${file.path} template loaded`)
+  return site
 }
 
 /**
  * Define site settings
+ * @return site object
  */
 function defineSiteSettings () {
   const cwd = process.cwd()
   const settingsPath = path.join(cwd, 'settings.json')
   const overrides = fs.existsSync(settingsPath) ? require(settingsPath) : []
-  const settings = {
+  const site = {
     title: 'Tamago website',
     baseurl: '',
     basepath: '/',
@@ -535,21 +560,22 @@ function defineSiteSettings () {
     styles: [],
     scripts: []
   }
-  Object.keys(settings).map(setting => {
-    settings[setting] = overrides[setting] ? overrides[setting] : settings[setting]
+  Object.keys(site).map(setting => {
+    site[setting] = overrides[setting] ? overrides[setting] : site[setting]
   })
-  settings.contentTypes.map(type => {
-    settings[type] = []
+  site.contentTypes.map(type => {
+    site[type] = []
   })
-  //console.log(settings)
-  site = settings
+  //console.log(site)
+  return site
 }
 
 /**
  * Build CSS.
+ * @param object site
  * @param object file
  */
-function buildCSS (file) {
+function buildCSS (site, file) {
   if (file.name[0] === '_') {
     return
   }
@@ -561,11 +587,11 @@ function buildCSS (file) {
   }
   sass.render({
     file: file.path
-  }, async (err, sassResult) => {
+  }, (err, sassResult) => {
     if (err) {
       console.error(err)
     }
-    const postResult = await postcss([autoprefixer])
+    const postResult = postcss([autoprefixer])
       .process(sassResult.css, {from: undefined})
     postResult.warnings().forEach(warn => {
       console.warn(warn.toString())
@@ -574,22 +600,26 @@ function buildCSS (file) {
     console.log(`${file.path} built`)
   })
   site.styles.push(output.url)
+  return site
 }
 
 /**
  * Build JS.
+ * @param object site
  * @param object file
  */
-function buildJS (file) {
-  buildCopy(file)
+function buildJS (site, file) {
+  buildCopy(site, file)
   site.scripts.push(path.join(site.basepath, file.dir, file.name + file.ext))
+  return site
 }
 
 /**
  * Init.
+ * @param object site
  * @param string name
  */
-async function init (name) {
+function init (site, name) {
   const nameSlug = slugify(name, slugifyOptions)
   const defaultsDir = `${__dirname}/defaults`
   const newSettings = JSON.stringify({
