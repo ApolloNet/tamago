@@ -3,7 +3,6 @@
 
 // Requires.
 const process = require('process')
-const { exec } = require('child_process')
 const path = require('path')
 const request = require('request')
 // Third parties.
