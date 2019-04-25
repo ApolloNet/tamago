@@ -19,9 +19,6 @@ const sass = require('node-sass')
 const postcss = require('postcss')
 const sharp = require('sharp')
 const slugify = require('slugify')
-// Promisify.
-const Promise = require('bluebird')
-Promise.promisifyAll(request)
 
 // Settings.
 let site = {}
@@ -428,7 +425,9 @@ async function formatGeo (variables, field) {
     return
   }
   const options = {
-    url: 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&q=' + encodeURI(variables[field]),
+    url: 'https://nominatim.openstreetmap.org/search'
+      + '?format=json&addressdetails=0'
+      + '&q=' + encodeURI(variables[field]),
     json: true,
     method: 'GET',
     headers: {
@@ -436,16 +435,18 @@ async function formatGeo (variables, field) {
       'Referer': 'http://localhost/'
     }
   }
-  const res = request.get(options)
-  if (res.statusCode !== 200) {
-    return
-  }
-  variables.hasGeo = true
-  variables.lat = res.body[0].lat
-  variables.lon = res.body[0].lon
-  variables.zoom = site.mapZoom
-  variables.styles.push('/libs/leaflet/leaflet.css')
-  variables.scripts.push('/libs/leaflet/leaflet.js')
+  request(options, (err, res, body) => {
+    if (err || res.statusCode !== 200) {
+      console.warn(`formatGeo: error with ${url}`)
+      return
+    }
+    variables.hasGeo = true
+    variables.lat = body[0].lat
+    variables.lon = body[0].lon
+    variables.zoom = site.mapZoom
+    variables.styles.push('/libs/leaflet/leaflet.css')
+    variables.scripts.push('/libs/leaflet/leaflet.js')
+  })
   return variables
 }
 
