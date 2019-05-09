@@ -3,9 +3,9 @@
 
 const process = require('process')
 
-const build = require('./build')
-const defineSettings = require('./define-settings')
-const init = require('./init')
+const build = require('../lib/build')
+const defineSettings = require('../lib/define-settings')
+const init = require('../lib/init')
 
 // Let's
 go()
