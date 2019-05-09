@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "node bin/tamago.js",
-    "lint": "standard bin/tamago.js"
+    "lint": "standard bin/tamago.js",
+    "test": "node tests/first.js"
   },
   "babel": {
     "presets": [
