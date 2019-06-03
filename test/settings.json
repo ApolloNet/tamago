@@ -1,4 +1,6 @@
 {
   "title": "Setten",
-  "contentTypes": ["pages", "events"]
+  "contentTypes": ["pages", "events"],
+  "templatesDir": "./lib/defaults/templates",
+  "publicDir": "/tmp/tamago-test"
 }
