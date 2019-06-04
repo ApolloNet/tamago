@@ -1,4 +1,6 @@
 'use strict'
+
+const os = require('os')
 const path = require('path')
 
 const test = require('ava')
@@ -11,6 +13,8 @@ const loadTemplates = require('../lib/load-templates')
 test('Test build sitemap', t => {
   let site = defineSettings(__dirname)
   site = loadTemplates(site)
+  site.publicDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tamago-'))
+  console.log(site.publicDir)
   buildSitemap(site)
   const sitemap = path.join(site.publicDir, 'sitemap.xml')
   const exists = fs.statSync(sitemap)
