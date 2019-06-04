@@ -53,11 +53,20 @@ Settings.json can override these settings:
 - `basepath`: string, the subpath of the website, like `/blog`, defaults to `/`
 - `contentTypes`: array, defaults to `["pages", "posts"]`
 - `home`: object, see below for details
-- `paginate`: int, number of posts per page, default to 10
-- `taxonomiesNames`: array of taxonomy names, defaults to ['tags']
-- `dateFormat`: string, defaults to 'D MMMM YYYY', use [https://date-fns.org/v1.30.1/docs/format](https://date-fns.org/v1.30.1/docs/format)
-- `mapZoom`: int, defaults to 12, see below for details
+- `paginate`: int, number of posts per page, default to `10`
+- `indexesNames`: array of indexes names, defaults to `['posts']`, see details below
+- `taxonomiesNames`: array of taxonomy names, defaults to `['tags']`
+- `dateFormat`: string, defaults to `D MMMM YYYY`, use [https://date-fns.org/v1.30.1/docs/format](https://date-fns.org/v1.30.1/docs/format)
+- `mapZoom`: int, defaults to `12`, see below for details
 - `imageFormats`: array of image formats, see below for details
+
+### Indexes
+
+_Indexes_ are lists of contents, ordered in antechronological order, and paginated.
+
+Each `contentTypes` set in `indexesNames` creates a webpage listing their contents.
+
+Also, indexes are built for each `taxonomiesNames`.
 
 ### Home
 
@@ -116,6 +125,12 @@ If your frontmatter has an 'address' field, it outputs has a map, via the [Leafl
 ## Templates
 
 The templating system is [Mustache](https://github.com/janl/mustache.js)
+
+Every content type is rendered through the default template files, named like `article--[VIEW].mustache`.
+
+It can be overriden by creating files like `article--[CONTENT-TYPE]--[VIEW].mustache`.
+
+Example: `article--event--full.mustache` will override the template `article--full.mustache` for a new `event` content type.
 
 ### Content object
 
