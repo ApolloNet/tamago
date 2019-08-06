@@ -6,6 +6,7 @@ const process = require('process')
 const build = require('../lib/build')
 const defineSettings = require('../lib/define-settings')
 const init = require('../lib/init')
+const serve = require('../lib/serve')
 
 // Let's
 go()
@@ -22,6 +23,10 @@ function go () {
   }
   if (args[0] === 'build') {
     build(site)
+    return
+  }
+  if (args[0] === 'serve') {
+    serve(site)
     return
   }
   help()
