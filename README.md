@@ -124,13 +124,13 @@ If your frontmatter has an 'address' field, it outputs has a map, via the [Leafl
 
 ## Templates
 
-The templating system is [Mustache](https://github.com/janl/mustache.js)
+The templating system is [Handlebars](https://handlebarsjs.com/)
 
-Every content type is rendered through the default template files, named like `article--[VIEW].mustache`.
+Every content type is rendered through the default template files, named like `article--[VIEW].tpl`.
 
-It can be overriden by creating files like `article--[CONTENT-TYPE]--[VIEW].mustache`.
+It can be overriden by creating files like `article--[CONTENT-TYPE]--[VIEW].tpl`.
 
-Example: `article--event--full.mustache` will override the template `article--full.mustache` for a new `event` content type.
+Example: `article--event--full.tpl` will override the template `article--full.tpl` for a new `event` content type.
 
 ### Content object
 
