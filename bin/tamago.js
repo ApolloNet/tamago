@@ -17,19 +17,18 @@ go()
 function go () {
   const site = defineSettings()
   const args = process.argv.slice(2)
-  if (args[0] === 'init' && args[1]) {
-    init(site, args[1])
-    return
+  const commands = {
+    'init': init,
+    'build': build,
+    'b': build,
+    'serve': serve,
+    's': serve,
+    'watch': serve,
+    'w': serve
   }
-  if (args[0] === 'build') {
-    build(site)
-    return
-  }
-  if (args[0] === 'serve') {
-    serve(site)
-    return
-  }
-  help()
+  commands[args[0]]
+    ? commands[args[0]](site, args[1])
+    : help()
 }
 
 /**
@@ -37,6 +36,7 @@ function go () {
  */
 function help () {
   console.log('⚠️ Commands are:')
-  console.log('🚀 tamago init "My website": init directory')
-  console.log('🔧 tamago build: build your website')
+  console.log('$ tamago init "My website"')
+  console.log('$ tamago build')
+  console.log('$ tamago serve')
 }
