@@ -1,6 +1,6 @@
 {
   "name": "tamago",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Static website generator, built with NodeJS.",
   "licence": "GPL-3.0",
   "author": {
