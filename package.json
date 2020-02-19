@@ -24,6 +24,7 @@
     "date-fns": "^2.1.0",
     "fs-extra": "^8.1.0",
     "gray-matter": "^4.0.2",
+    "handlebars": "^4.7.3",
     "http-server": "^0.11.1",
     "imagemin-cli": "^5.0.0",
     "marked": "^0.7.0",
@@ -35,7 +36,6 @@
   },
   "devDependencies": {
     "ava": "^2.3.0",
-    "handlebars": "^4.5.3",
     "standard": "^14.2.0"
   }
 }
